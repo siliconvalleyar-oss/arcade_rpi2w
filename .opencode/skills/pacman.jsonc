@@ -1,0 +1,21 @@
+{
+  "name": "pacman",
+  "description": "Pac-Man game for RPi Zero 2W + ST7789. Reference project for all other arcade games.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean",
+    "debug": "make debug"
+  },
+  "hardware": {
+    "display": "ST7789 240x240 via SPI0 (/dev/spidev0.0)",
+    "gpio": "/dev/gpiochip0 (ioctl GPIO_V1)",
+    "sound": "GPIO bit-bang on PIN_SOUND",
+    "buttons": "USE_BUTTONS: UP/DOWN/LEFT/RIGHT via GPIO"
+  },
+  "config": {
+    "hardwareProfile": "include/HardwareProfile.h",
+    "bonnetPins": "PIN_DC=25, PIN_RST=24, PIN_BL=26",
+    "altPins": "PIN_DC=21, PIN_RST=16, PIN_BL=20"
+  }
+}

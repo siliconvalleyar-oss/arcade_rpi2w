@@ -1,26 +1,17 @@
-# ============================================================
-# Makefile para Pac-Man en Raspberry Pi Zero 2W + ST7789
-# ============================================================
-
-TARGET = pacman
+TARGET = cars
 CC = g++
 CFLAGS = -O2 -std=c++11 -Wall -Iinclude
 LDFLAGS = -lpthread
 
-# Directorios
 SRCDIR = src
 INCDIR = include
 OBJDIR = obj
 BINDIR = bin
 
-# Archivos fuente
 SOURCES = $(wildcard $(SRCDIR)/*.cpp)
 OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
-
-# Ejecutable final
 TARGET_BIN = $(BINDIR)/$(TARGET)
 
-# Colores para output
 GREEN = \033[0;32m
 RED = \033[0;31m
 YELLOW = \033[1;33m
@@ -34,7 +25,7 @@ $(TARGET_BIN): $(OBJECTS)
 	@echo -e "$(GREEN)Linkeando...$(NC)"
 	@mkdir -p $(BINDIR)
 	$(CC) $(OBJECTS) -o $@ $(LDFLAGS)
-	@echo -e "$(GREEN)✓ Compilación completada: $(TARGET_BIN)$(NC)"
+	@echo -e "$(GREEN)Compilacion completada: $(TARGET_BIN)$(NC)"
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@echo -e "$(YELLOW)Compilando $<...$(NC)"
@@ -44,11 +35,11 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 clean:
 	@echo -e "$(RED)Limpiando...$(NC)"
 	@rm -rf $(OBJDIR)/*.o $(BINDIR)/$(TARGET)
-	@echo -e "$(GREEN)✓ Limpieza completada$(NC)"
+	@echo -e "$(GREEN)Limpieza completada$(NC)"
 
 run: $(TARGET_BIN)
-	@echo -e "$(GREEN)Ejecutando Pac-Man...$(NC)"
-	@echo -e "$(YELLOW)Nota: Ejecutar con sudo para GPIO/SPI$(NC)"
+	@echo -e "$(GREEN)Ejecutando Cars...$(NC)"
+	@echo -e "$(YELLOW)Ejecutar con sudo para GPIO/SPI$(NC)"
 	sudo $(TARGET_BIN)
 
 debug: CFLAGS += -g -DDEBUG
@@ -57,23 +48,17 @@ debug: $(TARGET_BIN)
 	sudo $(TARGET_BIN)
 
 help:
-	@echo -e "$(GREEN)Pac-Man Makefile$(NC)"
-	@echo "  make      - Compilar el juego"
-	@echo "  make run  - Compilar y ejecutar (requiere sudo)"
-	@echo "  make debug- Compilar con símbolos de depuración"
-	@echo "  make clean- Limpiar archivos objeto y ejecutable"
-	@echo "  make help - Mostrar esta ayuda"
+	@echo -e "$(GREEN)Cars Makefile$(NC)"
+	@echo "  make      - Compilar"
+	@echo "  make run  - Compilar y ejecutar (sudo)"
+	@echo "  make debug- Compilar con debug"
+	@echo "  make clean- Limpiar"
+	@echo "  make help - Ayuda"
 
-# Verificar que existe el SPI
 check:
-	@echo -e "$(YELLOW)Verificando configuración del sistema...$(NC)"
+	@echo -e "$(YELLOW)Verificando sistema...$(NC)"
 	@if [ -e /dev/spidev0.0 ]; then \
-		echo -e "$(GREEN)✓ SPI disponible$(NC)"; \
+		echo -e "$(GREEN)SPI disponible$(NC)"; \
 	else \
-		echo -e "$(RED)✗ SPI no disponible. Añadir dtparam=spi=on a /boot/config.txt$(NC)"; \
-	fi
-	@if [ -e /sys/class/pwm/pwmchip0 ]; then \
-		echo -e "$(GREEN)✓ PWM disponible$(NC)"; \
-	else \
-		echo -e "$(YELLOW)! PWM no disponible. Sonido por GPIO bit-bang$(NC)"; \
+		echo -e "$(RED)SPI no disponible. Agregar dtparam=spi=on a /boot/config.txt$(NC)"; \
 	fi

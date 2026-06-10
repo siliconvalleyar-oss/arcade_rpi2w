@@ -1,0 +1,15 @@
+{
+  "name": "space_invaders",
+  "description": "Space Invaders with 8x5 invaders, shields, levels, double buffer.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean",
+    "debug": "make debug"
+  },
+  "hardware": {
+    "display": "ST7789 240x240 via SPI0",
+    "gpio": "/dev/gpiochip0 (ioctl)",
+    "buttons": "LEFT/RIGHT/FIRE via GPIO"
+  }
+}

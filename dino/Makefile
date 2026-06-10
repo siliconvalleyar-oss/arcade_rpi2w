@@ -1,4 +1,4 @@
-TARGET = tetris
+TARGET = dino
 CXX      = g++
 CXXFLAGS = -O2 -std=c++11 -Wall -Iinclude
 LDFLAGS  = -lpthread
@@ -22,7 +22,7 @@ NC = \033[0m
 all: $(TARGET_BIN)
 	@echo "Build OK - ejecutar con: sudo $(TARGET_BIN)"
 
-$(TARGET_BIN): $(OBJS) | $(BINDIR)
+$(TARGET_BIN): $(OBJS) | $(BINDIR) $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(OBJDIR):
@@ -40,7 +40,7 @@ clean:
 	@echo -e "$(GREEN)Limpieza completada$(NC)"
 
 run: $(TARGET_BIN)
-	@echo -e "$(GREEN)Ejecutando Tetris...$(NC)"
+	@echo -e "$(GREEN)Ejecutando Dino...$(NC)"
 	sudo $(TARGET_BIN)
 
 debug: CXXFLAGS += -g -DDEBUG

@@ -1,0 +1,7 @@
+bin/
+obj/
+*.o
+assets/*.png
+*.swp
+*.swo
+*~

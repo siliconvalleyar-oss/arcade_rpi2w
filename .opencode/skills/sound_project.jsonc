@@ -1,0 +1,14 @@
+{
+  "name": "sound_project",
+  "description": "Arcade sound generator with arcade, phone, fax, and modem 56k sounds.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean"
+  },
+  "hardware": {
+    "audio": "PWM via libbcm2835",
+    "gpio": "GPIO 21 (configurable)",
+    "dependencies": "libbcm2835"
+  }
+}

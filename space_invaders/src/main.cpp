@@ -9,45 +9,88 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <errno.h>
 #include <sys/ioctl.h>
 #include <linux/spi/spidev.h>
+#include <linux/gpio.h>
 
-static int spi_fd = -1;
+static int spi_fd   = -1;
+static int gpio_fd  = -1;
+static int gpio_out_fd = -1;
+static int gpio_in_fd  = -1;
 
-// Funciones GPIO vía sysfs
-void gpio_export(int pin) {
-    char buf[64];
-    int fd = open("/sys/class/gpio/export", O_WRONLY);
-    if(fd<0) return;
-    snprintf(buf,sizeof(buf),"%d",pin);
-    write(fd,buf,strlen(buf));
-    close(fd);
-    usleep(100000);
+#define IDX_DC     0
+#define IDX_RST    1
+#define IDX_BL     2
+#define IDX_CS     3
+#define N_OUT_PINS 4
+
+static const uint32_t out_pins[N_OUT_PINS] = {
+    PIN_DC, PIN_RST, PIN_BL, PIN_CS
+};
+static uint8_t pin_state[N_OUT_PINS] = {0, 1, 0, 1};
+
+static int gpio_init_hw(void) {
+    gpio_fd = open(GPIO_CHIP, O_RDONLY);
+    if(gpio_fd < 0) { perror("open /dev/gpiochip0"); return -1; }
+
+    struct gpiohandle_request req_out;
+    memset(&req_out, 0, sizeof(req_out));
+    req_out.flags = GPIOHANDLE_REQUEST_OUTPUT;
+    req_out.lines = N_OUT_PINS;
+    for(int i = 0; i < N_OUT_PINS; i++) {
+        req_out.lineoffsets[i]    = out_pins[i];
+        req_out.default_values[i] = pin_state[i];
+    }
+    strncpy(req_out.consumer_label, "invaders_out", 15);
+    if(ioctl(gpio_fd, GPIO_GET_LINEHANDLE_IOCTL, &req_out) < 0) {
+        perror("GPIO_GET_LINEHANDLE_IOCTL (salidas)");
+        close(gpio_fd);
+        return -2;
+    }
+    gpio_out_fd = req_out.fd;
+
+    const uint32_t in_pins[] = {
+        BTN_LEFT_PIN, BTN_RIGHT_PIN, BTN_FIRE_PIN, BTN_START_PIN
+    };
+    struct gpiohandle_request req_in;
+    memset(&req_in, 0, sizeof(req_in));
+    req_in.flags = GPIOHANDLE_REQUEST_INPUT;
+    req_in.lines = 4;
+    for(int i = 0; i < 4; i++) req_in.lineoffsets[i] = in_pins[i];
+    strncpy(req_in.consumer_label, "invaders_btn", 15);
+    if(ioctl(gpio_fd, GPIO_GET_LINEHANDLE_IOCTL, &req_in) >= 0)
+        gpio_in_fd = req_in.fd;
+
+    return 0;
 }
-void gpio_set_dir(int pin, const char* dir) {
-    char path[64];
-    snprintf(path,sizeof(path),"/sys/class/gpio/gpio%d/direction",pin);
-    int fd = open(path,O_WRONLY);
-    if(fd<0) return;
-    write(fd,dir,strlen(dir));
-    close(fd);
-}
+
 void gpio_write(int pin, int val) {
-    char path[64];
-    snprintf(path,sizeof(path),"/sys/class/gpio/gpio%d/value",pin);
-    int fd = open(path,O_WRONLY);
-    if(fd<0) return;
-    if(val) write(fd,"1",1); else write(fd,"0",1);
-    close(fd);
+    int idx = -1;
+    for(int i = 0; i < N_OUT_PINS; i++)
+        if((int)out_pins[i] == pin) { idx = i; break; }
+    if(idx < 0) return;
+    pin_state[idx] = val ? 1 : 0;
+    struct gpiohandle_data data;
+    memset(&data, 0, sizeof(data));
+    for(int i = 0; i < N_OUT_PINS; i++)
+        data.values[i] = pin_state[i];
+    ioctl(gpio_out_fd, GPIOHANDLE_SET_LINE_VALUES_IOCTL, &data);
 }
+
 int gpio_read(int pin) {
-    char path[64], val;
-    snprintf(path,sizeof(path),"/sys/class/gpio/gpio%d/value",pin);
-    int fd = open(path,O_RDONLY);
-    if(fd<0) return 1;
-    read(fd,&val,1);
-    close(fd);
-    return (val=='0')?0:1;
+    (void)pin;
+    if(gpio_in_fd < 0) return 1;
+    const uint32_t in_pins[] = {
+        BTN_LEFT_PIN, BTN_RIGHT_PIN, BTN_FIRE_PIN, BTN_START_PIN
+    };
+    int idx = -1;
+    for(int i = 0; i < 4; i++)
+        if((int)in_pins[i] == pin) { idx = i; break; }
+    if(idx < 0) return 1;
+    struct gpiohandle_data data;
+    ioctl(gpio_in_fd, GPIOHANDLE_GET_LINE_VALUES_IOCTL, &data);
+    return data.values[idx];
 }
 
 void delay_ms(uint32_t ms) {
@@ -58,22 +101,43 @@ void delay_us(uint32_t us) {
     struct timespec ts={0, (long)us*1000L};
     nanosleep(&ts,NULL);
 }
+
+static int spi_init_dev(void) {
+    spi_fd = open(SPI_DEVICE, O_RDWR);
+    if(spi_fd < 0) return -1;
+    uint8_t mode = SPI_MODE_3;
+    if(ioctl(spi_fd, SPI_IOC_WR_MODE, &mode) < 0) return -2;
+    uint8_t bits = 8;
+    ioctl(spi_fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+    uint32_t speed = SPI_SPEED_HZ;
+    ioctl(spi_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+    return 0;
+}
+
 void spi_write_byte(uint8_t d) {
-    struct spi_ioc_transfer tr={0};
-    tr.tx_buf=(unsigned long)&d;
-    tr.len=1;
-    tr.speed_hz=SPI_SPEED_HZ;
-    tr.bits_per_word=8;
-    ioctl(spi_fd,SPI_IOC_MESSAGE(1),&tr);
+    struct spi_ioc_transfer tr;
+    memset(&tr, 0, sizeof(tr));
+    tr.tx_buf = (unsigned long)&d;
+    tr.len = 1;
+    tr.speed_hz = SPI_SPEED_HZ;
+    tr.bits_per_word = 8;
+    ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr);
 }
 void spi_write_buf(const uint8_t *buf, uint32_t len) {
     if(!len) return;
-    struct spi_ioc_transfer tr={0};
-    tr.tx_buf=(unsigned long)buf;
-    tr.len=len;
-    tr.speed_hz=SPI_SPEED_HZ;
-    tr.bits_per_word=8;
-    ioctl(spi_fd,SPI_IOC_MESSAGE(1),&tr);
+    const uint32_t CHUNK = 4096;
+    uint32_t offset = 0;
+    while(offset < len) {
+        uint32_t chunk = (len - offset < CHUNK) ? (len - offset) : CHUNK;
+        struct spi_ioc_transfer tr;
+        memset(&tr, 0, sizeof(tr));
+        tr.tx_buf = (unsigned long)(buf + offset);
+        tr.len = chunk;
+        tr.speed_hz = SPI_SPEED_HZ;
+        tr.bits_per_word = 8;
+        ioctl(spi_fd, SPI_IOC_MESSAGE(1), &tr);
+        offset += chunk;
+    }
 }
 void write_cmd(uint8_t c) { DC_LOW(); spi_write_byte(c); }
 void write_data(uint8_t d) { DC_HIGH(); spi_write_byte(d); }
@@ -85,15 +149,23 @@ void push_color(uint16_t color) {
 void push_color_n(uint16_t color, uint32_t n) {
     if(!n) return;
     DC_HIGH();
-    const uint32_t CHUNK=512;
-    uint8_t buf[CHUNK*2];
+    const uint32_t BUF_PX=512;
+    uint8_t buf[BUF_PX*2];
     uint8_t hi=color>>8, lo=color&0xFF;
-    for(uint32_t i=0;i<CHUNK;i++) { buf[2*i]=hi; buf[2*i+1]=lo; }
-    while(n) { uint32_t c=(n<CHUNK)?n:CHUNK; spi_write_buf(buf,c*2); n-=c; }
+    uint32_t fill=(n<BUF_PX)?n:BUF_PX;
+    for(uint32_t i=0;i<fill;i++) { buf[2*i]=hi; buf[2*i+1]=lo; }
+    uint32_t left=n;
+    while(left>0) {
+        uint32_t c2=(left<BUF_PX)?left:BUF_PX;
+        spi_write_buf(buf,c2*2);
+        left-=c2;
+    }
 }
 void set_window(uint16_t x0,uint16_t y0,uint16_t x1,uint16_t y1) {
-    write_cmd(0x2A); write_data(x0>>8); write_data(x0); write_data(x1>>8); write_data(x1);
-    write_cmd(0x2B); write_data(y0>>8); write_data(y0); write_data(y1>>8); write_data(y1);
+    write_cmd(0x2A); write_data(x0>>8); write_data(x0&0xFF);
+    write_data(x1>>8); write_data(x1&0xFF);
+    write_cmd(0x2B); write_data(y0>>8); write_data(y0&0xFF);
+    write_data(y1>>8); write_data(y1&0xFF);
     write_cmd(0x2C);
     DC_HIGH();
 }
@@ -120,22 +192,17 @@ void init_display() {
 }
 
 int hw_init() {
-    const int out[]={PIN_DC,PIN_RST,PIN_BL,PIN_CS};
-    const int in[]={BTN_LEFT_PIN,BTN_RIGHT_PIN,BTN_FIRE_PIN};
-    for(int i=0;i<4;i++) { gpio_export(out[i]); gpio_set_dir(out[i],"out"); }
-    for(int i=0;i<3;i++) { gpio_export(in[i]); gpio_set_dir(in[i],"in"); }
-    // LED
-    gpio_export(PIN_LED); gpio_set_dir(PIN_LED,"out"); gpio_write(PIN_LED,1);
-    spi_fd = open(SPI_DEVICE, O_RDWR);
-    if(spi_fd<0) return -1;
-    uint8_t mode=SPI_MODE_3; ioctl(spi_fd,SPI_IOC_WR_MODE,&mode);
-    uint8_t bits=8; ioctl(spi_fd,SPI_IOC_WR_BITS_PER_WORD,&bits);
-    uint32_t speed=SPI_SPEED_HZ; ioctl(spi_fd,SPI_IOC_WR_MAX_SPEED_HZ,&speed);
+    signal(SIGINT, sig_handler); signal(SIGTERM, sig_handler);
+    if(gpio_init_hw() < 0) return -1;
+    if(spi_init_dev() < 0) { hw_close(); return -2; }
     CS_HIGH(); DC_LOW(); RST_HIGH(); BL_LOW();
     return 0;
 }
 void hw_close() {
     BL_LOW();
+    if(gpio_out_fd>=0) close(gpio_out_fd);
+    if(gpio_in_fd>=0) close(gpio_in_fd);
+    if(gpio_fd>=0) close(gpio_fd);
     if(spi_fd>=0) close(spi_fd);
 }
 void sig_handler(int s) { (void)s; hw_close(); _exit(0); }

@@ -1,0 +1,16 @@
+{
+  "name": "tetris",
+  "description": "Tetris with dual input: SSH keyboard + GPIO buttons.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean",
+    "check": "make check"
+  },
+  "hardware": {
+    "display": "ST7789 240x240 via SPI0",
+    "gpio": "/dev/gpiochip0 (ioctl)",
+    "keyboard": "A/D move, W rot, S down, Space drop, P pause, Q quit",
+    "buttons": "LEFT/RIGHT/ROT/DOWN/PAUSE via GPIO"
+  }
+}

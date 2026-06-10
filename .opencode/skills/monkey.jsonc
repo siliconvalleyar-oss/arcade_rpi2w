@@ -1,0 +1,16 @@
+{
+  "name": "monkey",
+  "description": "Donkey Kong with PNG sprites, AABB physics, 3 levels, demo/joystick.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean",
+    "install-deps": "make install-deps"
+  },
+  "hardware": {
+    "display": "ST7789 240x240 via pigpio SPI",
+    "gpio": "pigpio library",
+    "dependencies": "libpigpio-dev",
+    "joystick": "Optional: UP/DOWN/LEFT/RIGHT + BTN_A/B"
+  }
+}

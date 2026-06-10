@@ -1,0 +1,14 @@
+{
+  "name": "mario",
+  "description": "Mario Bros platformer with physics, enemies, blocks, and sound.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean"
+  },
+  "hardware": {
+    "display": "ST7789 240x240 via SPI0",
+    "gpio": "/dev/gpiochip0 (ioctl)",
+    "controls": "Keyboard SSH (A/D/W/Q)"
+  }
+}

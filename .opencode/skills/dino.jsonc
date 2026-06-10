@@ -1,0 +1,15 @@
+{
+  "name": "dino",
+  "description": "Chrome Dino Game - jump over cacti and pterodactyls.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean",
+    "check": "make check"
+  },
+  "hardware": {
+    "display": "ST7789 240x240 via SPI0",
+    "gpio": "/dev/gpiochip0 (ioctl)",
+    "buttons": "BTN_JUMP (GPIO 5/17), BTN_COLOR (GPIO 6/22)"
+  }
+}

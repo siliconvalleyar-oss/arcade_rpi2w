@@ -1,0 +1,16 @@
+{
+  "name": "cars",
+  "description": "Road Racer game - dodge incoming cars. Based on Pac-Man structure.",
+  "commands": {
+    "build": "make",
+    "run": "sudo make run",
+    "clean": "make clean",
+    "debug": "make debug"
+  },
+  "hardware": {
+    "display": "ST7789 240x240 via SPI0",
+    "gpio": "/dev/gpiochip0 (ioctl)",
+    "sound": "GPIO bit-bang",
+    "buttons": "LEFT/RIGHT via GPIO"
+  }
+}
