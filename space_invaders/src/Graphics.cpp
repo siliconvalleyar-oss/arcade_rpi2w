@@ -73,4 +73,41 @@ namespace Graphics {
         fill_rect(x-off, y-off, size, size, (frame%2)?RED:YELLOW);
     }
     void draw_background(void) { fill_screen(BLACK); }
+
+void drawSprite(int x, int y, const Sprite& sprite, uint16_t /*bgColor*/) {
+    if (sprite.w == 0 || sprite.h == 0) return;
+    uint16_t* buf = fb.getBuffer();
+    int16_t dx = x, dy = y, sw = sprite.w, sh = sprite.h;
+    int16_t sx = 0, sy = 0;
+    if (dx < 0) { sx = -dx; sw += dx; dx = 0; }
+    if (dy < 0) { sy = -dy; sh += dy; dy = 0; }
+    if (dx + sw > TFT_W) sw = TFT_W - dx;
+    if (dy + sh > TFT_H) sh = TFT_H - dy;
+    if (sw <= 0 || sh <= 0) return;
+    fb.mark(dx, dy, sw, sh);
+    for (int row = 0; row < sh; row++) {
+        int off = (dy + row) * TFT_W + dx;
+        const uint32_t* src = sprite.pixels.data() + (row + sy) * sprite.w + sx;
+        for (int col = 0; col < sw; col++) {
+            uint32_t p = src[col];
+            uint8_t a = (p >> 24) & 0xFF;
+            if (a == 0) continue;
+            uint8_t sr = (p >> 16) & 0xFF;
+            uint8_t sg = (p >> 8) & 0xFF;
+            uint8_t sb = p & 0xFF;
+            if (a == 255) {
+                buf[off + col] = ((sr & 0xF8) << 8) | ((sg & 0xFC) << 3) | (sb >> 3);
+            } else {
+                uint16_t dst = buf[off + col];
+                uint8_t dr = ((dst >> 11) & 0x1F) * 255 / 31;
+                uint8_t dg = ((dst >> 5)  & 0x3F) * 255 / 63;
+                uint8_t db = (dst & 0x1F) * 255 / 31;
+                uint8_t mr = (sr * a + dr * (255 - a)) / 255;
+                uint8_t mg = (sg * a + dg * (255 - a)) / 255;
+                uint8_t mb = (sb * a + db * (255 - a)) / 255;
+                buf[off + col] = ((mr & 0xF8) << 8) | ((mg & 0xFC) << 3) | (mb >> 3);
+            }
+        }
+    }
+}
 }

@@ -1,16 +1,120 @@
 {
   "name": "cars",
-  "description": "Road Racer game - dodge incoming cars. Based on Pac-Man structure.",
+  "description": "Road Racer game for RPi Zero 2W + ST7789 240x240. Dodge incoming cars using PNG sprites, scrolling road, pixel-perfect collision.",
   "commands": {
-    "build": "make",
-    "run": "sudo make run",
-    "clean": "make clean",
-    "debug": "make debug"
+    "build": {
+      "description": "Build the cars game",
+      "command": "make"
+    },
+    "run": {
+      "description": "Build and run (requires sudo for SPI/GPIO)",
+      "command": "sudo make run"
+    },
+    "clean": {
+      "description": "Clean build artifacts",
+      "command": "make clean"
+    },
+    "debug": {
+      "description": "Build with debug symbols",
+      "command": "make debug"
+    },
+    "remote-build": {
+      "description": "Build via SSH on the Raspberry Pi",
+      "command": "ssh joy@raspberry.local \"cd /home/pi/src/arcade/cars && make -j4\""
+    },
+    "remote-run": {
+      "description": "Run via SSH on the Raspberry Pi",
+      "command": "ssh joy@raspberry.local \"cd /home/pi/src/arcade/cars && sudo ./bin/cars\""
+    }
   },
   "hardware": {
-    "display": "ST7789 240x240 via SPI0",
-    "gpio": "/dev/gpiochip0 (ioctl)",
-    "sound": "GPIO bit-bang",
-    "buttons": "LEFT/RIGHT via GPIO"
+    "display": {
+      "controller": "ST7789",
+      "resolution": "240x240",
+      "interface": "SPI0 (/dev/spidev0.0, mode 3, 40 MHz)"
+    },
+    "gpio": {
+      "driver": "/dev/gpiochip0 (ioctl GPIO_V1)",
+      "lcd_pins": {
+        "DC": 25,
+        "RST": 24,
+        "BL": 26
+      },
+      "button_pins": {
+        "LEFT": 27,
+        "RIGHT": 23
+      }
+    },
+    "sound": {
+      "pin": 13,
+      "type": "GPIO bit-bang via usleep delay"
+    }
+  },
+  "engine": {
+    "game_loop": {
+      "fps": 30,
+      "frame_time_us": 33000,
+      "timing": "clock_gettime(CLOCK_MONOTONIC) + delay_us",
+      "phases": [
+        "Phase 1: update_player() — save old pos, read buttons, calculate new x",
+        "Phase 2: update_enemies() — save old pos, move enemies, spawn logic, score pass",
+        "Phase 3: erase_sprite() — fill old player/enemy rects with ROAD_COLOR",
+        "Phase 4: erase_lane_dashes() — fill old lane dash positions with ROAD_COLOR",
+        "Phase 5: roadOffset = (roadOffset + roadSpeed) % DASH_STEP (avanza 4px/frame)",
+        "Phase 6: draw_lane_dashes() + draw_edge_lines() — redraw road markings at new offset",
+        "Phase 7: draw_all_sprites() — draw player + enemies on top of road",
+        "Phase 8: check_collisions() + draw_status() + frame timing"
+      ],
+      "note": "Road redrawn fully each frame (lane dashes + edge lines). No incremental road repair needed. Sprites cover dashes underneath."
+    },
+    "road_scrolling": {
+      "roadSpeed": 4,
+      "dash_step": 20,
+      "dash_size": "4x10 px",
+      "center_x": 120,
+      "road_shoulder": "ROAD_LEFT=20, ROAD_RIGHT=220",
+      "edge_lines": "continuous white vertical lines at x=18 and x=221",
+      "scroll_mechanic": "erase_lane_dashes() removes dashes at old offset, roadOffset advances by roadSpeed modulo DASH_STEP, draw_lane_dashes() paints dashes at new offset. Creates illusion of forward movement."
+    },
+    "sprites": {
+      "format": "PNG RGBA 32-bit",
+      "player": "assets/car_01.png (50x80 px)",
+      "enemy": "assets/enemy_00.png (50x80 px)",
+      "decoder": "picoPNG (vendored, include/picopng.h + src/picopng.cpp)",
+      "sprite_class": "include/Sprite.h — stores pixels as vector<uint32_t> RGBA + solid[] bool mask",
+      "drawing": "Graphics::drawSprite() — alpha-blended per pixel with bgColor fill for transparent areas. Uses row buffer (spi_write_buf per row instead of per pixel) for performance."
+    },
+    "collision": {
+      "type": "pixel-perfect",
+      "method": "First AABB overlap, then check overlapping pixels via Sprite::isSolid(x,y) which checks alpha > 0",
+      "function": "pixel_collision(x1,y1,sprite1, x2,y2,sprite2) in src/GameEngine.cpp",
+      "performance": "Typical overlap: ~100-800 px checks per collision × 8 enemies max"
+    },
+    "enemy_system": {
+      "max_enemies": 8,
+      "spawn_interval": "60 - level*2 frames (min 25) + rand()%15 jitter",
+      "enemySpeed": "2 + level/3 (max 6)",
+      "spawn_position": "random x within road, y = -ENEMY_H (above screen)",
+      "scoring": "+10 points per enemy that passes off-screen bottom",
+      "level_up": "every 500 points: increase speed + decrease spawn interval"
+    }
+  },
+  "files": {
+    "hardware_config": "include/HardwareProfile.h",
+    "graphics_header": "include/Graphics.h",
+    "game_engine_header": "include/GameEngine.h",
+    "sound_header": "include/Sound.h",
+    "sprite_header": "include/Sprite.h",
+    "png_decoder_header": "include/picopng.h",
+    "fonts_header": "include/fonts.h",
+    "main_source": "src/main.cpp",
+    "graphics_source": "src/Graphics.cpp",
+    "game_engine_source": "src/GameEngine.cpp",
+    "sound_source": "src/Sound.cpp",
+    "sprite_source": "src/Sprite.cpp",
+    "png_decoder_source": "src/picopng.cpp",
+    "player_sprite": "assets/car_01.png",
+    "enemy_sprite": "assets/enemy_00.png",
+    "makefile": "Makefile"
   }
 }

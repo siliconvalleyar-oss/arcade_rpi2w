@@ -48,15 +48,15 @@
 #define TFT_W       240
 #define TFT_H       240
 
-#define PLAYER_WIDTH    16
-#define PLAYER_HEIGHT   12
-#define INVADER_WIDTH   16
-#define INVADER_HEIGHT  12
-#define BULLET_WIDTH    3
-#define BULLET_HEIGHT   6
-#define NUM_INVADERS_X  8
-#define NUM_INVADERS_Y  5
-#define PLAYER_Y        (TFT_H - 30)
+#define PLAYER_WIDTH    59
+#define PLAYER_HEIGHT   64
+#define INVADER_WIDTH   48
+#define INVADER_HEIGHT  48
+#define BULLET_WIDTH    16
+#define BULLET_HEIGHT   60
+#define NUM_INVADERS_X  5
+#define NUM_INVADERS_Y  2
+#define PLAYER_Y        (TFT_H - 75)
 #define PLAYER_SPEED    5
 #define BULLET_SPEED    6
 #define INVADER_SPEED   1

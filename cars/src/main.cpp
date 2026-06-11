@@ -1,19 +1,17 @@
 // ============================================================
-//  main.cpp — Pac-Man RPi Zero 2W + GMT130 ST7789 240x240
+//  main.cpp — Road Racer (Cars) RPi Zero 2W + ST7789 240x240
 //
 //  Usa /dev/spidev0.0 (ioctl SPI_IOC_MESSAGE)
 //  Usa /dev/gpiochip0 (ioctl GPIO_V1_GET_LINEHANDLE_IOCTL)
-//  Sin librerías externas, sin bare-metal /dev/mem.
 //
-//  PRE-REQUISITOS en /boot/config.txt (o /boot/firmware/config.txt):
-//    dtparam=spi=on          ← habilitar SPI
-//    # NO cargar framebuffer de la pantalla (si está en uso)
+//  PRE-REQUISITOS en /boot/config.txt:
+//    dtparam=spi=on
 //
 //  Compilar:
-//    g++ -O2 -std=c++11 -o pacman main.cpp Graphics.cpp \
+//    g++ -O2 -std=c++11 -o cars main.cpp Graphics.cpp \
 //        GameEngine.cpp Sound.cpp -lpthread
 //  Ejecutar:
-//    sudo ./pacman
+//    sudo ./cars
 // ============================================================
 
 #include "../include/HardwareProfile.h"
@@ -33,8 +31,6 @@
 #include <sys/ioctl.h>
 #include <linux/spi/spidev.h>
 #include <linux/gpio.h>
-#include <termios.h>
-#include <sys/select.h>
 
 // ============================================================
 //  ESTADO GLOBAL
@@ -355,7 +351,17 @@ static void cleanup(void) {
 
 void hw_close(void) { cleanup(); }
 
-static void sig_handler(int s) { (void)s; cleanup(); _exit(0); }
+static void sig_handler(int s) {
+    (void)s;
+    BL_LOW();
+    if(gpio_out_fd >= 0) close(gpio_out_fd);
+    if(gpio_in_fd  >= 0) close(gpio_in_fd);
+    if(gpio_fd     >= 0) close(gpio_fd);
+    if(spi_fd      >= 0) close(spi_fd);
+    const char m[] = "SIG: cleanup\n";
+    write(STDERR_FILENO, m, sizeof(m)-1);
+    _Exit(0);
+}
 
 // ============================================================
 //  hw_init
@@ -384,36 +390,6 @@ int hw_init(void) {
 
 // ... (resto de includes y definiciones igual que antes)
 
-// Función para leer un carácter con timeout (milisegundos)
-static int readchar_timeout(int timeout_ms) {
-    fd_set set;
-    struct timeval tv;
-    FD_ZERO(&set);
-    FD_SET(STDIN_FILENO, &set);
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
-    if (select(STDIN_FILENO+1, &set, NULL, NULL, &tv) > 0) {
-        char c;
-        if (read(STDIN_FILENO, &c, 1) == 1)
-            return c;
-    }
-    return -1;
-}
-
-// Configurar stdin para entrada no bloqueante
-static void set_stdin_nonblocking(bool enable) {
-    struct termios tty;
-    tcgetattr(STDIN_FILENO, &tty);
-    if (enable) {
-        tty.c_lflag &= ~(ICANON | ECHO);
-        tty.c_cc[VMIN] = 0;
-        tty.c_cc[VTIME] = 0;
-    } else {
-        tty.c_lflag |= ICANON | ECHO;
-    }
-    tcsetattr(STDIN_FILENO, TCSANOW, &tty);
-}
-
 int main(void) {
     fprintf(stderr, "=== ROAD RACER - Auto Esquiva ===\n");
 
@@ -428,24 +404,7 @@ int main(void) {
     srand((unsigned)time(nullptr));
     sound_init();
 
-    // ----- Selección de modo con timeout -----
-    bool demoMode = true;   // por defecto demo
-    set_stdin_nonblocking(true);
-    printf("Seleccione modo: (j)uego / (d)emo [default demo en 3 segundos]\n");
-    int ch = readchar_timeout(3000);
-    if (ch == 'j' || ch == 'J') {
-        demoMode = false;
-        printf("Modo JUEGO seleccionado.\n");
-    } else if (ch == 'd' || ch == 'D') {
-        demoMode = true;
-        printf("Modo DEMO seleccionado.\n");
-    } else {
-        printf("No se detectó entrada, iniciando DEMO por defecto.\n");
-    }
-    set_stdin_nonblocking(false);
-
-    // Lanzar juego con el modo elegido
-    GameEngine::game_loop(demoMode);
+    GameEngine::game_loop(false);
 
     hw_close();
     return 0;

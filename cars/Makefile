@@ -39,7 +39,7 @@ clean:
 
 run: $(TARGET_BIN)
 	@echo -e "$(GREEN)Ejecutando Cars...$(NC)"
-	@echo -e "$(YELLOW)Ejecutar con sudo para GPIO/SPI$(NC)"
+	@-sudo killall pigpiod 2>/dev/null || true
 	sudo $(TARGET_BIN)
 
 debug: CFLAGS += -g -DDEBUG

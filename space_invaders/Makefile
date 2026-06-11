@@ -38,6 +38,7 @@ clean:
 
 run: $(TARGET_BIN)
 	@echo -e "$(GREEN)Ejecutando Space Invaders...$(NC)"
+	@-sudo killall pigpiod 2>/dev/null || true
 	sudo $(TARGET_BIN)
 
 debug: CXXFLAGS += -g -DDEBUG

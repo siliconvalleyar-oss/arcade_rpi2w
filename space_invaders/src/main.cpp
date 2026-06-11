@@ -22,13 +22,12 @@ static int gpio_in_fd  = -1;
 #define IDX_DC     0
 #define IDX_RST    1
 #define IDX_BL     2
-#define IDX_CS     3
-#define N_OUT_PINS 4
+#define N_OUT_PINS 3
 
 static const uint32_t out_pins[N_OUT_PINS] = {
-    PIN_DC, PIN_RST, PIN_BL, PIN_CS
+    PIN_DC, PIN_RST, PIN_BL
 };
-static uint8_t pin_state[N_OUT_PINS] = {0, 1, 0, 1};
+static uint8_t pin_state[N_OUT_PINS] = {0, 1, 0};
 
 static int gpio_init_hw(void) {
     gpio_fd = open(GPIO_CHIP, O_RDONLY);
@@ -195,7 +194,7 @@ int hw_init() {
     signal(SIGINT, sig_handler); signal(SIGTERM, sig_handler);
     if(gpio_init_hw() < 0) return -1;
     if(spi_init_dev() < 0) { hw_close(); return -2; }
-    CS_HIGH(); DC_LOW(); RST_HIGH(); BL_LOW();
+    DC_LOW(); RST_HIGH(); BL_LOW();
     return 0;
 }
 void hw_close() {

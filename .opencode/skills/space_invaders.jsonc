@@ -1,15 +1,257 @@
 {
   "name": "space_invaders",
-  "description": "Space Invaders with 8x5 invaders, shields, levels, double buffer.",
+  "description": "Space Invaders clone for RPi Zero 2W + ST7789 240x240. PNG sprite pipeline, double-buffered framebuffer with dirty-rect tracking, alpha blending against actual framebuffer content. Ship selection (5 ships) via LEFT/RIGHT/FIRE. 5x2 enemy grid within 40% screen height. Configurable level progression, 3 lives, high-score persistence per session.",
   "commands": {
-    "build": "make",
-    "run": "sudo make run",
-    "clean": "make clean",
-    "debug": "make debug"
+    "build": {
+      "description": "Compile all sources (no link due to Pi cross-build)",
+      "command": "make"
+    },
+    "run": {
+      "description": "Build and launch (kills pigpiod first, requires sudo for SPI/GPIO)",
+      "command": "sudo make run"
+    },
+    "clean": {
+      "description": "Remove object files and binary",
+      "command": "make clean"
+    },
+    "debug": {
+      "description": "Build with debug symbols and -O0",
+      "command": "make debug"
+    },
+    "remote-build": {
+      "description": "Build via SSH on the Raspberry Pi (4 jobs)",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/space_invaders && make -j4\""
+    },
+    "remote-build-clean": {
+      "description": "Full clean rebuild on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/space_invaders && make clean && make -j4\""
+    },
+    "remote-run": {
+      "description": "Run via SSH on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/space_invaders && sudo ./bin/space_invaders\""
+    }
   },
   "hardware": {
-    "display": "ST7789 240x240 via SPI0",
-    "gpio": "/dev/gpiochip0 (ioctl)",
-    "buttons": "LEFT/RIGHT/FIRE via GPIO"
+    "display": {
+      "controller": "ST7789",
+      "resolution": "240x240",
+      "interface": "SPI0 (/dev/spidev0.0, mode 3, 40 MHz)",
+      "pins": {
+        "MOSI": 10,
+        "SCLK": 11,
+        "DC": 25,
+        "RST": 24,
+        "BL": 26
+      },
+      "note": "CS (GPIO 8) is owned by kernel SPI driver as CE0. NOT claimed by GPIO to avoid conflict."
+    },
+    "gpio": {
+      "driver": "/dev/gpiochip0 (ioctl GPIO_V1, gpiod v2 API via gpio_ioctl.h)",
+      "outputs": ["SOUND(13)", "LED(26)"],
+      "button_pins": {
+        "LEFT": 27,
+        "RIGHT": 23,
+        "FIRE": 6,
+        "START": 5
+      },
+      "note": "Buttons active-low (pulled up externally, read 0 when pressed)."
+    },
+    "sound": {
+      "pin": 13,
+      "type": "GPIO bit-bang square wave via usleep delay",
+      "output": "Piezo buzzer, monophonic, blocking tone generation"
+    }
+  },
+  "engine": {
+    "screen_layout": {
+      "resolution": "240x240 px",
+      "enemy_zone": "y=0..96 (40% of screen, within TFT_H/2.5)",
+      "player_zone": "ship bottom at y=229 (PLAYER_Y=165 + PLAYER_HEIGHT=64)",
+      "hud_top": "y=5: SCORE + HIGH",
+      "hud_bottom": "y=228: LIVES + LVL",
+      "grid_columns": 5,
+      "grid_rows": 2,
+      "enemy_type_distribution": "row 0 → type 1 (30 pts), row 1 → type 2 (20 pts)"
+    },
+    "game_loop": {
+      "fps": 60,
+      "frame_time_us": 16666,
+      "timing": "clock_gettime(CLOCK_MONOTONIC) + delay_us (spin-wait for remainder)",
+      "phases": [
+        "Phase 1: update_player() — read buttons, compute new x, handle fire (bullet spawn from ship tip)",
+        "Phase 2: update_bullets() — advance all bullets (player up / enemy down), off-screen cull",
+        "Phase 3: update_invaders() — step timer ticks, move group, boundary check + reverse/drop, random enemy shoots",
+        "Phase 4: update_explosions() — increment explosion frame, cull after 4 frames",
+        "Phase 5: check_collisions() — player-bullet vs enemy (AABB), enemy-bullet vs player (AABB using sprite dims), triggers score/explosion/life-loss",
+        "Phase 6: draw_game() — fill screen black → draw all enemies (enemySprites[t]) → draw bullets → draw explosions → draw player (selectedShip) → draw HUD",
+        "Phase 7: flush_buffer() → SPI transfer (full or dirty-rects) → frame cap"
+      ],
+      "game_states": [
+        "title → show_title() — logo + enemy demo, wait ANY button or 3s timeout",
+        "ship_select → show_ship_select() — cycle through 5 ships with LEFT/RIGHT, FIRE confirms",
+        "gameplay → while(game_active && lives>0) { ... }",
+        "game_over → show_game_over() — final score, high score check, wait FIRE to restart"
+      ]
+    },
+    "player": {
+      "ships": {
+        "total": 5,
+        "files": ["assets/nave_00.png","assets/nave_01.png","assets/nave_02.png","assets/nave_03.png","assets/nave_04.png"],
+        "dimensions": {
+          "nave_00": "59x64 px",
+          "nave_01": "44x48 px",
+          "nave_02": "36x48 px",
+          "nave_03": "37x48 px",
+          "nave_04": "40x48 px"
+        },
+        "default": "nave_00 (selectedShip=0)"
+      },
+      "speed": "5 px/frame (300 px/s at 60fps)",
+      "boundary": "player_x in [0, TFT_W - sprite.w] (full screen width)",
+      "hitbox": "dynamic: playerSprites[selectedShip].w × .h, bottom-aligned at PLAYER_BOTTOM = 229"
+    },
+    "enemy_system": {
+      "grid": {
+        "rows": 2,
+        "cols": 5,
+        "start_x": 5,
+        "start_y": 2,
+        "spacing_x": 45,
+        "spacing_y": 48
+      },
+      "sprites": {
+        "type1": "assets/enemy_00.png (48x45 px)",
+        "type2": "assets/enemy_01.png (45x48 px)",
+        "type3": "assets/enemy_02.png (48x48 px, unused in 2-row layout)"
+      },
+      "movement": {
+        "speed": "1 px per step (INVADER_SPEED=1)",
+        "step_interval": "30 frames at level 1 (decreases with level: 30/level)",
+        "drop_amount": "8 px per boundary hit",
+        "boundary_margin": "5 px from each edge (x <= 5 or x >= TFT_W-53 triggers reverse)",
+        "game_over_trigger": "when any enemy y + 48 >= PLAYER_Y (165)"
+      },
+      "shooting": {
+        "interval": "40 - level*2 frames (minimum ~18 frames at high levels)",
+        "bullet_speed": "6 px/frame (downward)",
+        "spawn": "enemy center-bottom: x + INVADER_WIDTH/2 - BULLET_WIDTH/2, y + INVADER_HEIGHT"
+      }
+    },
+    "projectiles": {
+      "bullet_sprite": "assets/disparo_de_nave_00.png (16x60 px)",
+      "player_bullet": {
+        "direction": "upward (y -= BULLET_SPEED)",
+        "spawn": "ship tip: x + (sprite.w - bulletSprite.w)/2, y = PLAYER_BOTTOM - sprite.h - bulletSprite.h",
+        "cull": "when bullet.y < 0 (off top of screen)"
+      },
+      "enemy_bullet": {
+        "direction": "downward (y += BULLET_SPEED)",
+        "cull": "when bullet.y > TFT_H (off bottom of screen)"
+      }
+    },
+    "explosions": {
+      "sprite": "assets/impact_00.png (71x64 px)",
+      "duration": "4 frames then culled",
+      "position": "centered on enemy: x - impactSprite.w/2, y - impactSprite.h/2"
+    },
+    "collision": {
+      "type": "AABB (axis-aligned bounding box)",
+      "player_bullet_vs_enemy": "enemy hitbox = INVADER_WIDTH(48) x INVADER_HEIGHT(48)",
+      "enemy_bullet_vs_player": "player hitbox = selectedShip.sprite.w × .h, top = PLAYER_BOTTOM - sprite.h",
+      "note": "Enemy hitbox uses fixed INVADER_WIDTH/HEIGHT = 48. Player hitbox is sprite-accurate per selection. Explosions have no collision."
+    },
+    "scoring": {
+      "enemy_type1": "30 points",
+      "enemy_type2": "20 points",
+      "level_up": "when all enemies in current wave are destroyed",
+      "level_effect": "step interval = 30/level frames (move faster), shoot interval = 40 - level*2 (shoot more)"
+    },
+    "lives": {
+      "initial": 3,
+      "on_hit": "reset player_x to center, clear all bullets, 1s pause",
+      "game_over": "when lives reach 0"
+    }
+  },
+  "sprite_pipeline": {
+    "format": "PNG RGBA 32-bit (decoded by picoPNG into raw RGBA bytes)",
+    "decoder": "include/picopng.h + src/picopng.cpp (vendored, MIT-licensed)",
+    "storage": "include/Sprite.h — pixels as vector<uint32_t> (RGBA packed: A<<24|R<<16|G<<8|B), solid[] as vector<bool> (alpha>0)",
+    "loading": "Sprite::load() reads PNG file → decodePNG() → populate pixels[] and solid[]. All 5 player, 3 enemy, 1 bullet, 1 impact sprites loaded once during boot (spritesLoaded flag skips re-load).",
+    "rendering": {
+      "function": "Graphics::drawSprite(x, y, sprite, bgColor) — note: bgColor parameter is unused (kept for API compat)",
+      "pixel_pipeline": [
+        "Extract alpha (a=px>>24), R, G, B from RGBA pixel",
+        "If a==0: skip pixel (framebuffer unchanged — true transparency)",
+        "If a==255: write pixel directly as RGB565 to framebuffer",
+        "If 0<a<255: read current framebuffer pixel at same position, blend in RGB888: out = src*a/255 + dst*(255-a)/255, convert result to RGB565 and write back"
+      ],
+      "clipping": "Full source/destination clipping against [0, TFT_W) × [0, TFT_H). No off-screen drawing.",
+      "framebuffer_write": "Direct buffer[offset] access via FrameBuffer::getBuffer(). Single mark() call per drawSprite call for dirty-rect tracking.",
+      "note": "Previous implementation blended all pixels against a single bgColor (BLACK) passed as argument. Current implementation reads the actual framebuffer pixel at each position for correct alpha blending when sprites overlap."
+    }
+  },
+  "framebuffer": {
+    "class": "FrameBuffer (singleton via get())",
+    "buffers": "uint16_t buffer[57600] + uint16_t prev[57600] (both RGB565, 240x240)",
+    "dirty_rects": "up to 32 coalescing rects; overflow triggers full-flush",
+    "modes": {
+      "full_flush": "whole buffer → spi_write_buf (40 MHz SPI, ~8ms for full 240x240)",
+      "partial_flush": "per-row dirty check against prev[], per-row SPI write of only changed rows"
+    },
+    "blit": "Bulk pixel copy for pre-blended sprite data. Used by Graphics::draw_char/draw_string for text rendering (not by sprites since the new drawSprite writes directly)."
+  },
+  "flow": {
+    "boot": [
+      "hw_init() → GPIO outputs + SPI device open + display init + FrameBuffer::init()",
+      "srand(time(NULL)) — seed RNG",
+      "load_sprites() → decode all PNGs into Sprite objects (once)",
+      "show_title() → 'SPACE INVADERS' + enemy demo + press any button / 3s timeout",
+      "show_ship_select() → cycle with LEFT/RIGHT, confirm with FIRE (default ship 1)",
+      "game_loop: while(1) { score=0; lives=3; level=1; init_game(); while(game_active && lives>0) { update... draw... flush... frame_cap } show_game_over() }"
+    ]
+  },
+  "key_design_decisions": [
+    "PNG sprites replaced procedural draw_* functions: all visual entities (player, enemy, bullet, explosion) are now RGBA PNGs for pixel-art quality.",
+    "Ship selection before first game: 5 distinct ship designs. Selection persists for the session (no re-pick between games).",
+    "Enemy grid constrained to 40% screen height (96px) with 2 rows of 48px sprites. 5 columns spaced at 45px to fit within 240px width.",
+    "PLAYER_Y = TFT_H - 75 = 165 to accommodate 64px-tall ships, with collision box bottom at 229 (11px from screen bottom).",
+    "Dynamic player hitbox: uses actual selected sprite dimensions instead of fixed PLAYER_WIDTH/HEIGHT. Bullet spawn position is sprite-relative.",
+    "Alpha blending reads from actual framebuffer pixel (not from a single bgColor) for correct semi-transparency when sprites overlap.",
+    "Dirty-rect tracking: only changed regions are SPI-transferred, significantly reducing per-frame SPI bandwidth.",
+    "GPIO via /dev/gpiochip0 ioctl (not sysfs). PIN_CS (GPIO 8) explicitly excluded from output pins to avoid conflict with kernel SPI CE0 driver.",
+    "pigpiod must be killed before GPIO access: handled automatically in Makefile run target (sudo killall pigpiod).",
+    "Cross-compile on host, copy binary to Pi. No native toolchain on Pi. SSH-based remote build/run via make remote-* targets."
+  ],
+  "files": {
+    "root_makefile": "Makefile",
+    "hardware_config": "include/HardwareProfile.h",
+    "framebuffer_header": "include/FrameBuffer.h",
+    "graphics_header": "include/Graphics.h",
+    "game_engine_header": "include/GameEngine.h",
+    "sound_header": "include/Sound.h",
+    "sprite_header": "include/Sprite.h",
+    "png_decoder_header": "include/picopng.h",
+    "fonts_header": "include/fonts.h",
+    "main_source": "src/main.cpp",
+    "graphics_source": "src/Graphics.cpp",
+    "game_engine_source": "src/GameEngine.cpp",
+    "sound_source": "src/Sound.cpp",
+    "sprite_source": "src/Sprite.cpp",
+    "png_decoder_source": "src/picopng.cpp",
+    "player_sprites": [
+      "assets/nave_00.png",
+      "assets/nave_01.png",
+      "assets/nave_02.png",
+      "assets/nave_03.png",
+      "assets/nave_04.png"
+    ],
+    "enemy_sprites": [
+      "assets/enemy_00.png",
+      "assets/enemy_01.png",
+      "assets/enemy_02.png"
+    ],
+    "bullet_sprite": "assets/disparo_de_nave_00.png",
+    "explosion_sprite": "assets/impact_00.png",
+    "skill_file": ".opencode/skills/space_invaders.jsonc"
   }
 }

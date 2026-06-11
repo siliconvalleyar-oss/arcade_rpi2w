@@ -26,7 +26,13 @@ namespace GameEngine {
     extern bool     gameOver;
     extern uint16_t highScore;
 
+    // ---- Sprites ----
+    extern Sprite playerCar;
+    extern Sprite enemyCar;
+    extern bool spritesLoaded;
+
     // ---- API ----
+    bool load_sprites(void);
     void init_game(void);
     void draw_road(void);
     void update_player(void);

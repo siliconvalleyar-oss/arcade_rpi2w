@@ -81,13 +81,29 @@ public:
         num = 0;
     }
     
+    void blit(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t* pixels) {
+        if (w <= 0 || h <= 0) return;
+        int srcX = 0, srcY = 0;
+        int dw = w, dh = h;
+        if (x < 0) { srcX = -x; dw += x; x = 0; }
+        if (y < 0) { srcY = -y; dh += y; y = 0; }
+        if (x + dw > TFT_W) dw = TFT_W - x;
+        if (y + dh > TFT_H) dh = TFT_H - y;
+        if (dw <= 0 || dh <= 0) return;
+        for (int row = 0; row < dh; row++) {
+            int offset = (y + row) * TFT_W + x;
+            const uint16_t* src = pixels + (row + srcY) * w + srcX;
+            for (int col = 0; col < dw; col++) buffer[offset + col] = src[col];
+        }
+        mark(x, y, dw, dh);
+    }
+
     void clear(uint16_t color) {
         for(int i=0; i<TFT_W*TFT_H; i++) buffer[i] = color;
         full = true;
     }
-    
-private:
-    FrameBuffer() : full(true), num(0) {}
+
+    uint16_t* getBuffer() { return buffer; }
     
     void mark(int16_t x, int16_t y, int16_t w, int16_t h) {
         if(full) return;

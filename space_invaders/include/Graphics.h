@@ -3,6 +3,7 @@
 
 #include "HardwareProfile.h"
 #include "fonts.h"
+#include "Sprite.h"
 
 namespace Graphics {
     void fill_screen(uint16_t color);
@@ -21,6 +22,7 @@ namespace Graphics {
     void draw_shield(int16_t x, int16_t y);
     void draw_explosion(int16_t x, int16_t y, uint8_t frame);
     void draw_background(void);
+    void drawSprite(int x, int y, const Sprite& sprite, uint16_t bgColor);
     void flush_buffer(void);
 }
 #endif

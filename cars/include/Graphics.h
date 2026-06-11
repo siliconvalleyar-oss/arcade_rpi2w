@@ -3,6 +3,7 @@
 
 #include "HardwareProfile.h"
 #include "fonts.h"
+#include "Sprite.h"
 
 namespace Graphics {
 
@@ -22,21 +23,9 @@ namespace Graphics {
                      uint16_t fg, uint16_t bg, uint8_t scale);
 
     // ---- Sprites de juego ----
-    void draw_pacman(int16_t x, int16_t y, bool mouth_open, uint8_t dir);
-    void draw_pacman_scaled(int16_t cx, int16_t cy, bool mouth_open,
-                            uint8_t dir, uint8_t scale);
-
-    void draw_ghost(int16_t x, int16_t y, uint16_t color, bool frightened);
-    void draw_ghost_scaled(int16_t cx, int16_t cy, uint16_t color,
-                           bool frightened, uint8_t scale);
-
-    // ---- Laberinto ----
-    void draw_dot  (int16_t cellPx, int16_t cellPy);
-    void draw_power(int16_t cellPx, int16_t cellPy);
-    void draw_wall_cell(int16_t px, int16_t py, bool top, bool bot, bool lft, bool rgt);
-
-    // (dentro de namespace Graphics, al final)
     void draw_car(int16_t x, int16_t y, uint16_t color, int16_t size);
+    void drawSprite(int x, int y, const Sprite& sprite, uint16_t bgColor);
+    Sprite tintSprite(const Sprite& src, uint8_t rMult, uint8_t gMult, uint8_t bMult);
 
 }
 
