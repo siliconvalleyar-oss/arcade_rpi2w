@@ -1,0 +1,10 @@
+ver el proyecto del juego pacman y tomar como referencia el skill .
+se trata del juego dino de google chrome , hacer una version demo por default , que no utilizar pulsadores .
+la version si la selecciona al iniciar la aplicacion ,
+./app  Game
+ o
+./app Demo // por default
+copiar el modo en que se utilizan los pulsadores del proyecto pacman/
+levantar los assets/*.png toma solo lo visible , no colisiona con el canal alpha, se ve transparente el canal alpha .
+
+ una vez terminado el codigo , generar un skill para dino 

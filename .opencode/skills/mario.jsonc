@@ -1,14 +1,222 @@
 {
   "name": "mario",
-  "description": "Mario Bros platformer with physics, enemies, blocks, and sound.",
+  "description": "Mario Bros platformer for RPi Zero 2W + ST7789 240x240. Tile-based level (16×16 tiles, 15×15 grid), PNG sprite pipeline, entity physics with gravity/collision, GPIO bit-bang sound, AnimatedSprite system, TileSet loader. Currently autoplay demo with Goomba enemies, tile collision, lives/coins HUD, title screen (super_mario_presentacion.png). 20 PNG assets.",
   "commands": {
-    "build": "make",
-    "run": "sudo make run",
-    "clean": "make clean"
+    "build": {
+      "description": "Compile all sources",
+      "command": "make"
+    },
+    "run": {
+      "description": "Build and launch (kills pigpiod first, requires sudo for SPI/GPIO)",
+      "command": "sudo killall pigpiod 2>/dev/null; sudo make run"
+    },
+    "clean": {
+      "description": "Remove object files and binary",
+      "command": "make clean"
+    },
+    "debug": {
+      "description": "Build with debug symbols",
+      "command": "make debug"
+    },
+    "remote-build": {
+      "description": "Build via SSH on the Raspberry Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/mario && make -j4\""
+    },
+    "remote-build-clean": {
+      "description": "Full clean rebuild on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/mario && make clean && make -j4\""
+    },
+    "remote-run": {
+      "description": "Run via SSH on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/mario && sudo ./bin/mario\""
+    }
   },
   "hardware": {
-    "display": "ST7789 240x240 via SPI0",
-    "gpio": "/dev/gpiochip0 (ioctl)",
-    "controls": "Keyboard SSH (A/D/W/Q)"
+    "display": {
+      "controller": "ST7789",
+      "resolution": "240x240",
+      "interface": "SPI0 (/dev/spidev0.0, mode 3, 40 MHz)",
+      "pins": { "MOSI": 10, "SCLK": 11, "DC": 25, "RST": 24, "BL": 26 },
+      "note": "CS (GPIO 8) owned by kernel SPI CE0. NOT claimed by GPIO."
+    },
+    "gpio": {
+      "driver": "/dev/gpiochip0 (ioctl GPIO_V1)",
+      "outputs": ["DC(25)", "RST(24)", "BL(26)", "SOUND(13)"],
+      "button_pins": {
+        "UP": 17,
+        "DOWN": 22,
+        "LEFT": 27,
+        "RIGHT": 23
+      },
+      "note": "Buttons defined in HardwareProfile.h but not read in game loop — current version is keyboard-only via SSH or autoplay mode"
+    },
+    "sound": {
+      "pin": 13,
+      "type": "GPIO bit-bang square wave via delay_us",
+      "effects": ["jump(600Hz)", "coin(988+1319Hz)", "stomp(200Hz)", "powerup(660+880+1100Hz)", "mario_die(440+350+260Hz)", "start_melody(660+880+1100+1320Hz)", "bird(1200+1000Hz)"]
+    }
+  },
+  "engine": {
+    "screen_layout": {
+      "play_area": "240×240, background SKY_BLUE (color565(135,206,235))",
+      "tiles": "16×16 px each, 15 columns × 15 rows",
+      "ground": "rows 13-14 (y=208-239) filled GROUND tiles",
+      "blocks": "? blocks, bricks, pipes at various positions in test level",
+      "hud": "'MARIO' at (2,2), coin count (YELLOW) at (50,2), 'LIVES' at (80,2), lives (RED) at (130,2)"
+    },
+    "game_loop": {
+      "fps": "~60 (16ms delay)",
+      "phases": [
+        "Phase 1: showTitleScreen() — draw super_mario_presentacion.png centered, play start melody, wait 3s",
+        "Phase 2: fill_screen(SKY_BLUE), level.draw() — render tile sprites once (static background)",
+        "Phase 3: while(running) { update(frameDelay/1000.0f); draw(); delay_ms(frameDelay); }",
+        "Phase 4: 'GAME OVER' screen for 2s"
+      ],
+      "update": [
+        "Entity::update(dt, tileMap) for each active entity — physics, movement, gravity",
+        "Player–Enemy AABB collision: if player falling on top → stomp (vy=-3), else → player.takeDamage()",
+        "Remove inactive non-player entities",
+        "Autoplay: player always moves RIGHT, sensor ray at (x+width+5, y+height/2) detects walls/enemies → jump"
+      ],
+      "draw": [
+        "Clear previous entity positions (fill_rect with SKY_BLUE, redraw tiles underneath)",
+        "Draw all active entities at current positions",
+        "Update prevX/prevY for next frame",
+        "Draw HUD text"
+      ]
+    },
+    "game_states": [
+      "title → showTitleScreen() — PNG + sound",
+      "gameplay → update + draw loop until player.active == false",
+      "game_over → 'GAME OVER' text, 2s delay, then program ends"
+    ],
+    "player": {
+      "sprites": {
+        "intended": "mario_parado.png (standing), mario_move_00.png (running) — loaded as AnimatedSprite frames",
+        "current_fallback": "Renderer::drawPlayer() renders colored rect (RED, eyes as white rects, mouth line)",
+        "note": "AnimatedSprite + Sprite load infrastructure exists but current Player::draw() uses procedural rects instead of PNG sprites"
+      },
+      "physics": {
+        "speed": 1.8,
+        "jump_force": -5.2,
+        "gravity": 0.4,
+        "max_fall": 6.0,
+        "invincible_timer": 2.0s after hit"
+      },
+      "hitbox": "AABB = {x, y, width, height} — dynamic from sprite dimensions or 14×16 (small) / 16×20 (big)",
+      "abilities": ["move LEFT/RIGHT", "jump (coyote time via jumpBuffer=0.15s)", "takeDamage (big→small, small→lose life, 0 lives→dead)", "collect coins"],
+      "controls": "Current autoplay only. Intended: UP=17/jump, LEFT=27, RIGHT=23, DOWN=22 (not yet read)"
+    },
+    "enemies": {
+      "goomba": {
+        "sprites": "enemy_00.png (intended, not yet used in draw — currently procedural BROWN rect with white eyes)",
+        "physics": "speed 1.0, gravity 0.4, max_fall 6.0, reverses direction at walls/edges",
+        "hitbox": "14×14 AABB (from Entity default) or sprite dimensions when PNG-based",
+        "behavior": "patrol horizontally, reverse on wall/edge, stompable from above (0.5s stompTimer then remove)"
+      }
+    },
+    "tiles": {
+      "size": "16×16 px",
+      "types": ["EMPTY", "BRICK", "QUESTION", "USED_BLOCK", "HIDDEN_BLOCK", "PIPE_TOP_LEFT", "PIPE_TOP_RIGHT", "PIPE_BOTTOM_LEFT", "PIPE_BOTTOM_RIGHT", "GROUND", "COIN_BRICK"],
+      "tilemap": "uint8_t tiles[MAP_WIDTH][MAP_HEIGHT] = uint8_t[15][15]",
+      "rendering": "Renderer::drawTile() draws colored rects + borders + '?' text (procedural fallback). Level::draw() uses TileSet → Sprite → Graphics::drawSprite() if TileSet loaded."
+    },
+    "tileset": {
+      "loader": "TileSet class loads assets/sprite_00.png through sprite_29.png",
+      "mapping": "GROUND→tiles[0], BRICK→tiles[1], QUESTION→tiles[2], USED_BLOCK→tiles[3], HIDDEN_BLOCK→tiles[4], PIPE_TOP_LEFT→tiles[10], PIPE_TOP_RIGHT→tiles[11], PIPE_BOTTOM_LEFT→tiles[12], PIPE_BOTTOM_RIGHT→tiles[13]",
+      "note": "Current asset PNGs have different names (not sprite_XX.png). TileSet fails to load — falls back to procedural Renderer::drawTile(). This is a known gap."
+    },
+    "test_level": {
+      "description": "loadTestLevel() in Level.cpp — 15×15 grid",
+      "layout": "Ground rows 13-14 (y=208-239). ?-block at (5,10), bricks at (8,10)(9,10), ?-block at (10,10), hidden block at (7,7). Pipe at columns 12-13, rows 11-12."
+    },
+    "autoplay": {
+      "active": "always true (bool autoPlay = true in Game constructor)",
+      "behavior": "player->move(RIGHT) every frame. Sensor ray at (x+width+5, y+height/2) checks tileMap — if non-empty tile detected → jump. Also checks for enemies within 50px horizontally and 30px vertically → jump."
+    }
+  },
+  "sprite_pipeline": {
+    "format": "PNG RGBA 32-bit (decoded by picoPNG)",
+    "decoder": "include/picopng.h + src/picopng.cpp (vendored, MIT-licensed)",
+    "storage": "include/Sprite.h — pixels as vector<uint32_t> (RGBA packed), solid[] vector<bool>",
+    "rendering": "Graphics::drawSprite() — alpha blend against bgColor param (blends bgColor in RGB888 space, not actual framebuffer pixels). Fully transparent→bgColor, fully opaque→RGB565, partial→mix with bgColor.",
+    "loading": "Sprite::load() called per entity/tile — can be called at any time (no singleton guard)",
+    "png_direct": "Graphics::drawPNG() also available for direct-from-file rendering (no Sprite caching)"
+  },
+  "architecture": {
+    "pattern": "Game loop with explicit update/draw phases, no framebuffer — draws directly to display per frame",
+    "key_differences_from_dino": [
+      "NO FrameBuffer class — draws directly to ST7789 each frame (no double-buffering, no dirty-rects)",
+      "NO GameEngine singleton — Game class owns all entities and runs the loop",
+      "NO Button class — button GPIO defined but unused (autoplay drives input)",
+      "Tile-based level instead of scrolling infinite terrain",
+      "Entity subclass hierarchy (Player, Enemy) with virtual update/draw",
+      "AnimatedSprite frame-based animation system",
+      "Sound system with multiple effect functions"
+    ],
+    "files": {
+      "hardware_config": "include/HardwareProfile.h",
+      "types": "include/Types.h (constants, enums, screen/tile sizes)",
+      "graphics_header": "include/Graphics.h",
+      "graphics_impl": "src/Graphics.cpp (fill, text, PNG, sprite drawing)",
+      "sprite_header": "include/Sprite.h",
+      "sprite_impl": "src/Sprite.cpp",
+      "picopng_header": "include/picopng.h",
+      "picopng_impl": "src/picopng.cpp",
+      "entity_header": "include/Entity.h",
+      "entity_impl": "src/Entity.cpp",
+      "player_header": "include/Player.h",
+      "player_impl": "src/Player.cpp",
+      "enemy_header": "include/Enemy.h",
+      "enemy_impl": "src/Enemy.cpp",
+      "level_header": "include/Level.h",
+      "level_impl": "src/Level.cpp",
+      "game_header": "include/Game.h",
+      "game_impl": "src/Game.cpp",
+      "renderer_header": "include/Renderer.h",
+      "renderer_impl": "src/Renderer.cpp",
+      "physics_header": "include/Physics.h",
+      "physics_impl": "src/Physics.cpp",
+      "collision_header": "include/Collision.h",
+      "collision_impl": "src/Collision.cpp (pixel-perfect collision via isSolid)",
+      "animated_sprite_header": "include/AnimatedSprite.h",
+      "animated_sprite_impl": "src/AnimatedSprite.cpp",
+      "tileset_header": "include/TileSet.h",
+      "tileset_impl": "src/TileSet.cpp",
+      "sound_header": "include/Sound.h",
+      "sound_impl": "src/Sound.cpp",
+      "fonts": "include/fonts.h",
+      "main": "src/main.cpp (hw_init, init_display, showSpriteGrid test, Game::run)"
+    },
+    "assets": [
+      "assets/super_mario_presentacion.png — title screen (240×240 approx, loaded as Sprite via drawSprite)",
+      "assets/mario_parado.png — standing Mario (intended for animIdle)",
+      "assets/mario_move_00.png — running Mario (intended for animRun/jump)",
+      "assets/enemy_00.png — Goomba enemy sprite",
+      "assets/gosth_00.png — ghost enemy",
+      "assets/hongo_00.png — mushroom powerup",
+      "assets/fruit_00.png, fruit_01.png — collectible fruits",
+      "assets/llave_00.png — key item",
+      "assets/cofre.png — chest",
+      "assets/botle_00.png — bottle",
+      "assets/cup.png — cup",
+      "assets/flag_00.png — level end flag",
+      "assets/heart_00.png — heart (extra life)",
+      "assets/money.png — coin/money pickup",
+      "assets/nave_00.png — ship (unused, from space_invaders crossover)",
+      "assets/bonus_00.png — bonus item",
+      "assets/boom_00.png — explosion",
+      "assets/exit.png — exit door",
+      "assets/game_over.png — game over screen (not yet used — text fallback)"
+    ],
+    "known_gaps": [
+      "TileSet loads 'assets/sprite_00.png' etc. but actual assets have different names — tile sprites not yet rendered from PNG",
+      "Player::draw() and Enemy::draw() use procedural rects instead of PNG sprites",
+      "Buttons (UP/DOWN/LEFT/RIGHT) defined in HardwareProfile.h but not read in game loop",
+      "No FrameBuffer/dirty-rect — full redraw per frame causes visible flicker",
+      "Makefile run target missing 'sudo killall pigpiod' before execution",
+      "showSpriteGrid() test runs before game starts (5s delay showing index-numbered tile sprites — may show nothing if TileSet fails)",
+      "Sound::sound_init() has duplicate ioctl call (code dead after first close(fd))"
+    ]
   }
 }
