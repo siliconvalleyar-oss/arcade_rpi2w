@@ -1,15 +1,145 @@
 {
   "name": "dino",
-  "description": "Chrome Dino Game - jump over cacti and pterodactyls.",
+  "description": "Chrome Dino (T-Rex Runner) clone for RPi Zero 2W + ST7789 240x240. Infinite runner with PNG sprite pipeline, double-buffered framebuffer with dirty-rect tracking, correct alpha blending against framebuffer content. Dino jumps over cactus obstacles with increasing speed. Ground scroll with pebbles. Identical hardware architecture to space_invaders/cars (same pinout, FrameBuffer, Graphics, drawSprite).",
   "commands": {
-    "build": "make",
-    "run": "sudo make run",
-    "clean": "make clean",
-    "check": "make check"
+    "build": {
+      "description": "Compile all sources",
+      "command": "make"
+    },
+    "run": {
+      "description": "Build and launch (kills pigpiod, requires sudo for SPI/GPIO)",
+      "command": "sudo make run"
+    },
+    "clean": {
+      "description": "Remove object files and binary",
+      "command": "make clean"
+    },
+    "debug": {
+      "description": "Build with debug symbols",
+      "command": "make debug"
+    },
+    "remote-build": {
+      "description": "Build via SSH on the Raspberry Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/dino && make -j4\""
+    },
+    "remote-run": {
+      "description": "Run via SSH on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/arcade/dino && sudo ./bin/dino\""
+    }
   },
   "hardware": {
-    "display": "ST7789 240x240 via SPI0",
-    "gpio": "/dev/gpiochip0 (ioctl)",
-    "buttons": "BTN_JUMP (GPIO 5/17), BTN_COLOR (GPIO 6/22)"
+    "display": {
+      "controller": "ST7789",
+      "resolution": "240x240",
+      "interface": "SPI0 (/dev/spidev0.0, mode 3, 40 MHz)",
+      "pins": { "MOSI": 10, "SCLK": 11, "DC": 25, "RST": 24, "BL": 26 }
+    },
+    "gpio": {
+      "driver": "/dev/gpiochip0 (ioctl GPIO_V1)",
+      "outputs": ["SOUND(13)"],
+      "button_pins": {
+        "FIRE/JUMP": 6,
+        "LEFT": 27,
+        "RIGHT": 23,
+        "START": 5
+      }
+    },
+    "sound": {
+      "pin": 13,
+      "type": "GPIO bit-bang square wave via usleep delay",
+      "note": "Defined in HardwareProfile.h but no sound effects yet in current version"
+    }
+  },
+  "engine": {
+    "screen_layout": {
+      "ground_y": 200,
+      "dino_x": 45,
+      "play_area": "y=0..200 (dino + cactus), ground line at y=200 (3px dark gray + 2px gray), pebbles below at y=204-205",
+      "hud": "HI score (GRAY), current score (WHITE), speed (GRAY) at y=5"
+    },
+    "game_loop": {
+      "fps": 60,
+      "frame_time_us": 16666,
+      "timing": "clock_gettime(CLOCK_MONOTONIC) + delay_us spin-wait",
+      "phases": [
+        "Phase 1: update() — physics (gravity, jump), animation (2-frame cycle every 8 ticks), ground scroll, score, cactus spawn/move, collision detection",
+        "Phase 2: draw() — clear framebuffer to BLACK → draw ground line + pebbles → draw cactus sprites → draw dino sprite → draw HUD → flush dirty-rects"
+      ],
+      "game_states": [
+        "title → 'DINO RUNNER' with sprite, wait FIRE",
+        "gameplay → while(!gameOver) { update(); draw(); frame_cap(); }",
+        "game_over → 'GAME OVER' text overlay, press FIRE to restart with hi-score retained"
+      ]
+    },
+    "dino": {
+      "sprites": {
+        "frame0": "assets/dino_00.png (75x81 px) — standing/idle pose",
+        "frame1": "assets/dino_01.png (40x43 px) — running pose"
+      },
+      "physics": {
+        "jump_velocity": -13,
+        "gravity": "1 px/frame^2",
+        "ground_y": 200,
+        "on_ground": true
+      },
+      "animation": "2 frames cycled every 8 ticks. Both sprites bottom-aligned to GROUND_Y.",
+      "hitbox": "DINO_X + 6, drawY + 4, (sprite.w - 12) x (sprite.h - 8), clamped minimum 4x4"
+    },
+    "obstacles": {
+      "cactus_types": 2,
+      "cactus_00": "assets/cactus_00.png (20x33 px) — small single cactus",
+      "cactus_01": "assets/cactus_01.png (53x48 px) — large multi cactus",
+      "spawn_interval": "40 + rand()%40 frames (reduces to 25+rand()%25 when speed > 10)",
+      "speed": "starts at GAME_SPEED_INIT(6) px/frame, +1 every 500 points, max 15",
+      "hitbox": "cactus.x + 4, GROUND_Y - sprite.h + 4, (sprite.w - 8) x (sprite.h - 8), clamped minimum 4x4"
+    },
+    "collision": {
+      "type": "AABB with 4px inset margin",
+      "check": "per-frame: dino hitbox vs each active cactus hitbox",
+      "result": "gameOver = true; 'GAME OVER' overlay shown; press FIRE to restart"
+    },
+    "scoring": {
+      "rate": "+1 per frame (60/sec)",
+      "hi_score": "persists across restarts within the session",
+      "speed_increase": "every 500 points: speed++ (capped at 15)"
+    },
+    "ground": {
+      "line": "3px DARK_GRAY at y=200 + 2px GRAY at y=203",
+      "pebbles": "10 pebbles at y=204-205, scrolling with groundScroll offset, 3 colors (LIGHT_GRAY/DARK_GRAY). Each pebble = 1-2 pixels.",
+      "scroll": "groundScroll += speed each frame, modulo (TFT_W + 20)"
+    }
+  },
+  "sprite_pipeline": {
+    "format": "PNG RGBA 32-bit (decoded by picoPNG)",
+    "decoder": "include/picopng.h + src/picopng.cpp (vendored, MIT-licensed)",
+    "storage": "include/Sprite.h — pixels as vector<uint32_t> (RGBA packed), solid[] vector<bool>",
+    "rendering": "Graphics::drawSprite() — reads actual framebuffer pixel at each position for correct alpha blending. Fully transparent (a=0) → skip. Fully opaque (a=255) → direct RGB565 write. Partial alpha → blend against existing framebuffer pixel in RGB888, then RGB565.",
+    "loading": "Sprite::load() called once on boot (spritesLoaded guard). 2 dino + 2 cactus sprites loaded."
+  },
+  "framebuffer": {
+    "class": "FrameBuffer (singleton)",
+    "buffers": "uint16_t buffer[57600] + uint16_t prev[57600] (RGB565, 240x240)",
+    "dirty_rects": "up to 32 coalescing rects; overflow triggers full-flush"
+  },
+  "architecture": {
+    "pattern": "Identical to space_invaders and cars — shared FrameBuffer/Graphics/Sprite/picoPNG infrastructure",
+    "files": {
+      "hardware_config": "include/HardwareProfile.h",
+      "framebuffer": "include/FrameBuffer.h",
+      "game_engine": "include/GameEngine.h",
+      "graphics": "include/Graphics.h",
+      "sprite_class": "include/Sprite.h",
+      "png_decoder": "include/picopng.h",
+      "fonts": "include/fonts.h",
+      "main": "src/main.cpp",
+      "game_engine_impl": "src/GameEngine.cpp",
+      "graphics_impl": "src/Graphics.cpp",
+      "sprite_impl": "src/Sprite.cpp",
+      "png_decoder_impl": "src/picopng.cpp",
+      "dino_sprite_0": "assets/dino_00.png",
+      "dino_sprite_1": "assets/dino_01.png",
+      "cactus_sprite_0": "assets/cactus_00.png",
+      "cactus_sprite_1": "assets/cactus_01.png"
+    }
   }
 }
