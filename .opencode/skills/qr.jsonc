@@ -1,0 +1,81 @@
+{
+  "name": "qr",
+  "description": "QR Code generator for RPi Zero 2W using libqrencode. Generates QR codes as ASCII art in console and/or PPM image files. CLI usage: bin/generate_qr_code 'data' [-f]. Default data encodes a WiFi credential string (WPA). Compiled via SSH on the Pi.",
+  "commands": {
+    "build": {
+      "description": "Compile all sources",
+      "command": "make"
+    },
+    "run": {
+      "description": "Run with default WiFi QR data",
+      "command": "make run"
+    },
+    "run-wifi": {
+      "description": "Generate WiFi QR and save as PPM",
+      "command": "make run-wifi"
+    },
+    "clean": {
+      "description": "Remove object files and binary",
+      "command": "make clean"
+    },
+    "debug": {
+      "description": "Build with debug symbols",
+      "command": "make debug"
+    },
+    "remote-build": {
+      "description": "Build via SSH on the Raspberry Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/qr && make -j4\""
+    },
+    "remote-build-clean": {
+      "description": "Full clean rebuild on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/qr && make clean && make -j4\""
+    },
+    "remote-run": {
+      "description": "Run via SSH on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/qr && make run\""
+    },
+    "install-deps": {
+      "description": "Install libqrencode-dev on the Pi",
+      "command": "ssh pi@raspberry.local \"cd /home/pi/src/qr && bash tools/install_deps.sh\""
+    }
+  },
+  "dependencies": {
+    "runtime": ["libqrencode4"],
+    "build": ["libqrencode-dev", "g++", "make"],
+    "install": "bash tools/install_deps.sh (runs apt-get install -y qrencode libqrencode-dev)",
+    "python_alt": "tools/generate_qr.py (uses pip package 'qrcode' for PNG generation)"
+  },
+  "build_system": {
+    "type": "Makefile (arcade-style)",
+    "compiler": "g++ -std=c++11",
+    "flags": "-O2 -Wall -Iinclude",
+    "linker": "-lqrencode",
+    "structure": {
+      "src": "main.cpp, qr.cpp",
+      "include": "qr.h",
+      "obj": "intermediate .o files",
+      "bin": "generate_qr_code (final binary)"
+    }
+  },
+  "usage": {
+    "default": "make run → generates QR for 'WIFI:T:WPA;S:MiRedWiFi;P:MiContraseña123;;'",
+    "custom": "bin/generate_qr_code 'any text here'",
+    "save_ppm": "bin/generate_qr_code 'text' -f → also writes qrcode.ppm",
+    "make_run_wifi": "make run-wifi → same as default + -f flag"
+  },
+  "architecture": {
+    "files": {
+      "header": "include/qr.h",
+      "main": "src/main.cpp",
+      "qr_impl": "src/qr.cpp",
+      "makefile": "Makefile",
+      "install_script": "tools/install_deps.sh",
+      "python_alt": "tools/generate_qr.py",
+      "old_compile": "tools/compile.sh"
+    },
+    "output_formats": [
+      "console ASCII (Unicode block chars ██)",
+      "PPM image (P6 24-bit RGB, scale=4)"
+    ]
+  }
+}

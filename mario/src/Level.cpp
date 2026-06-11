@@ -45,13 +45,15 @@ void Level::removeTile(int x, int y) {
 
 
 void Level::draw() const {
-    if (!tileSet) return;
     for (int y = 0; y < MAP_HEIGHT; y++) {
         for (int x = 0; x < MAP_WIDTH; x++) {
             TileType t = (TileType)tiles[x][y];
-            if (t != TileType::EMPTY) {
+            if (t == TileType::EMPTY) continue;
+            if (tileSet) {
                 const Sprite& spr = tileSet->getTile(t);
                 Graphics::drawSprite(x * TILE_SIZE, y * TILE_SIZE, spr, SKY_BLUE);
+            } else {
+                Renderer::drawTile(x * TILE_SIZE, y * TILE_SIZE, t);
             }
         }
     }

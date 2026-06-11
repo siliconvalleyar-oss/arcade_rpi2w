@@ -20,7 +20,9 @@
 static int spi_fd = -1;
 static int gpio_fd = -1;
 static int gpio_out_fd = -1;
-//static int gpio_in_fd = -1;
+static int gpio_in_fd = -1;
+
+static const uint32_t in_pins[4] = { BTN_UP_PIN, BTN_DOWN_PIN, BTN_LEFT_PIN, BTN_RIGHT_PIN };
 
 #define IDX_DC     0
 #define IDX_RST    1
@@ -46,6 +48,18 @@ static int gpio_init() {
         close(gpio_fd); return -2;
     }
     gpio_out_fd = req_out.fd;
+
+    struct gpiohandle_request req_in;
+    memset(&req_in, 0, sizeof(req_in));
+    req_in.flags = GPIOHANDLE_REQUEST_INPUT;
+    req_in.lines = 4;
+    for (int i = 0; i < 4; i++) req_in.lineoffsets[i] = in_pins[i];
+    strncpy(req_in.consumer_label, "mario_in", 15);
+    if (ioctl(gpio_fd, GPIO_GET_LINEHANDLE_IOCTL, &req_in) < 0) {
+        gpio_in_fd = -1;
+    } else {
+        gpio_in_fd = req_in.fd;
+    }
     return 0;
 }
 
@@ -60,7 +74,17 @@ void gpio_write(int pin, int val) {
     ioctl(gpio_out_fd, GPIOHANDLE_SET_LINE_VALUES_IOCTL, &data);
 }
 
-int gpio_read(int pin) { return 0; }
+int gpio_read(int pin) {
+    if (gpio_in_fd < 0) return 1;
+    int idx = -1;
+    for (int i = 0; i < 4; i++)
+        if ((int)in_pins[i] == pin) { idx = i; break; }
+    if (idx < 0) return 1;
+    struct gpiohandle_data data;
+    if (ioctl(gpio_in_fd, GPIOHANDLE_GET_LINE_VALUES_IOCTL, &data) < 0)
+        return 1;
+    return data.values[idx];
+}
 
 static int spi_init_dev() {
     spi_fd = open(SPI_DEVICE, O_RDWR);
@@ -180,6 +204,7 @@ void init_display() {
 static void cleanup() {
     BL_LOW();
     if(gpio_out_fd>=0) close(gpio_out_fd);
+    if(gpio_in_fd>=0) close(gpio_in_fd);
     if(gpio_fd>=0) close(gpio_fd);
     if(spi_fd>=0) close(spi_fd);
 }
@@ -196,39 +221,6 @@ int hw_init() {
 void hw_close() { cleanup(); }
 
 
-void showSpriteGrid() {
-    TileSet tileSet;
-    if (!tileSet.load("assets")) {
-        fprintf(stderr, "Error cargando tileset\n");
-        return;
-    }
-    
-    Graphics::fill_screen(BLACK);
-    
-    const int COLS = 6;
-    const int ROWS = 5; // 30 sprites = 6x5
-    const int SPRITE_SIZE = 32; // asumiendo 32x32
-    const int PADDING = 2;
-    
-    for (int i = 0; i < 30; ++i) {
-        int col = i % COLS;
-        int row = i / COLS;
-        int x = col * (SPRITE_SIZE + PADDING) + PADDING;
-        int y = row * (SPRITE_SIZE + PADDING) + PADDING;
-        
-        const Sprite& spr = tileSet.getTileByIndex(i);
-        Graphics::drawSprite(x, y, spr, BLACK);
-        
-        // Opcional: dibujar número de índice
-        char buf[4];
-        snprintf(buf, sizeof(buf), "%02d", i);
-        Graphics::draw_string(x+2, y+2, buf, WHITE, BLACK, 1);
-    }
-    
-    delay_ms(5000); // mostrar 5 segundos
-}
-
-
 int main() {
     if (hw_init() < 0) { fprintf(stderr, "HW init failed\n"); return 1; }
     init_display();
@@ -237,27 +229,8 @@ int main() {
     sound_init();
     Renderer::init();
     
-    // ==== PRUEBA DE SPRITES ====
-    showSpriteGrid();
-    // ===========================
-    
     Game game;
     game.run();
     hw_close();
     return 0;
 }
-
-/*
-int main() {
-    if(hw_init()<0) { fprintf(stderr,"HW init failed\n"); return 1; }
-    init_display();
-    delay_ms(50);
-    BL_HIGH();
-    sound_init();
-    Renderer::init();
-    Game game;
-    game.run();
-    hw_close();
-    return 0;
-}
-*/
