@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 
+#define JOYSTICK_ENABLED
 #define BONNET_ADAFRUIT_ST7789
 
 #ifdef BONNET_ADAFRUIT_ST7789
@@ -35,9 +36,10 @@
 	#endif
 #endif
 
-#define JOYSTICK_ENABLED
-
+#define SPI_DEVICE      "/dev/spidev0.0"
 #define SPI_SPEED_HZ    31250000
+#define SPI_MODE        SPI_MODE_0
+#define GPIO_CHIP       "/dev/gpiochip0"
 #define TARGET_FPS      30
 #define FRAME_TIME_US   (1000000 / TARGET_FPS)
 

@@ -1,14 +1,12 @@
 #include "../include/Game.h"
+#include "../include/Hw.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <algorithm>
 #include <unistd.h>
 
-// Joystick GPIO (descomentado si JOYSTICK_ENABLED está definido)
-#ifdef JOYSTICK_ENABLED
-#include <pigpio.h>
-#endif
+// Joystick GPIO (vía ioctl /dev/gpiochip0 por defecto)
 
 // ============================================================
 //  DifficultyConfig
@@ -169,11 +167,11 @@ bool Game::run()
 void Game::readInput(InputState& inp)
 {
 #ifdef JOYSTICK_ENABLED
-    inp.left     = (gpioRead(PIN_JOY_LEFT)  == 0);
-    inp.right    = (gpioRead(PIN_JOY_RIGHT) == 0);
-    inp.up       = (gpioRead(PIN_JOY_UP)    == 0);
-    inp.down     = (gpioRead(PIN_JOY_DOWN)  == 0);
-    inp.jumpBtn  = (gpioRead(PIN_JOY_BTN_A) == 0);
+    inp.left     = (hw_gpio_read(PIN_JOY_LEFT)  == 0);
+    inp.right    = (hw_gpio_read(PIN_JOY_RIGHT) == 0);
+    inp.up       = (hw_gpio_read(PIN_JOY_UP)    == 0);
+    inp.down     = (hw_gpio_read(PIN_JOY_DOWN)  == 0);
+    inp.jumpBtn  = (hw_gpio_read(PIN_JOY_BTN_A) == 0);
 #else
     // ---- Demo AI: el jugador corre solo ----
     runDemoAI(inp);

@@ -1,8 +1,7 @@
 # ============================================================
 #  Makefile - Donkey Kong para Raspberry Pi Zero 2W
 #  Compilador: g++ con C++20
-#  Dependencia: libpigpio-dev
-#    sudo apt-get install libpigpio-dev
+#  GPIO/SPI via ioctl del kernel (sin librerias externas)
 # ============================================================
 
 CXX      := g++
@@ -11,8 +10,8 @@ CXXFLAGS := -std=c++20 \
             -O2 \
             -I./include
 
-# pigpio para SPI y GPIO
-LDFLAGS  := -lpigpio -lrt -lpthread
+# Sin -lpigpio: usa ioctl /dev/gpiochip0 + /dev/spidev0.0
+LDFLAGS  := -lpthread
 
 TARGET   := bin/Game_App
 
@@ -39,12 +38,13 @@ obj/%.o: src/%.cpp
 obj/Game.o:     src/Game.cpp      include/Game.h include/Types.h \
                 include/Graphics.h include/Renderer.h include/Sound.h \
                 include/Physics.h  include/Player.h   include/Enemy.h \
-                include/Level.h    include/HardwareProfile.h
+                include/Level.h    include/HardwareProfile.h include/Hw.h
 obj/Graphics.o: src/Graphics.cpp  include/Graphics.h include/Types.h \
                 include/fonts.h    include/picopng.h
 obj/Renderer.o: src/Renderer.cpp  include/Renderer.h include/HardwareProfile.h \
-                include/Graphics.h
-obj/Sound.o:    src/Sound.cpp     include/Sound.h include/HardwareProfile.h
+                include/Graphics.h include/Hw.h
+obj/Sound.o:    src/Sound.cpp     include/Sound.h include/HardwareProfile.h include/Hw.h
+obj/Hw.o:       src/Hw.cpp        include/Hw.h include/HardwareProfile.h
 obj/Physics.o:  src/Physics.cpp   include/Physics.h include/Types.h
 obj/Player.o:   src/Player.cpp    include/Player.h include/Entity.h \
                 include/Physics.h  include/Sound.h

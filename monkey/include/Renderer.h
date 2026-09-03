@@ -5,7 +5,7 @@
 #include <vector>
 
 // ============================================================
-//  Renderer - maneja el display ST7789 vía pigpio SPI
+//  Renderer - maneja el display ST7789 vía SPI ioctl (/dev/spidev0.0)
 //
 //  Optimización de refresco parcial:
 //   1. Framebuffer::getDirtyRanges() devuelve rangos de filas sucias
@@ -21,7 +21,7 @@ public:
     Renderer() = default;
     ~Renderer();
 
-    // Inicializar pigpio + SPI + secuencia de reset del ST7789
+    // Inicializar SPI + GPIO + secuencia de reset del ST7789
     bool init();
     void shutdown();
 
@@ -43,7 +43,6 @@ private:
     void setWindow(int x0, int y0, int x1, int y1);
     void st7789Init();
 
-    int  spi_handle_{-1};
     bool initialized_{false};
 
     // Buffer temporal para conversión big-endian

@@ -1,14 +1,10 @@
 #include "../include/Renderer.h"
+#include "../include/Hw.h"
 #include <cstdio>
-#include <cstring>
-#include <unistd.h>    // usleep
-
-// pigpio - disponible en Raspberry Pi
-// sudo apt-get install libpigpio-dev
-#include <pigpio.h>
 
 // ============================================================
-//  Renderer
+//  Renderer - ST7789 vía SPI ioctl (/dev/spidev0.0)
+//  GPIO ioctl (/dev/gpiochip0) para DC/RST/BL
 // ============================================================
 
 Renderer::~Renderer()
@@ -20,44 +16,22 @@ bool Renderer::init()
 {
     if (initialized_) return true;
 
-    // ----- Init pigpio -----
-    if (gpioInitialise() < 0) {
-        fprintf(stderr, "[Renderer] gpioInitialise() fallido\n");
-        return false;
-    }
-
-    // ----- Configurar pines -----
-    gpioSetMode(PIN_DC,  PI_OUTPUT);
-    gpioSetMode(PIN_RST, PI_OUTPUT);
-    gpioSetMode(PIN_BL,  PI_OUTPUT);
-
-    // Backlight off durante init
-    gpioWrite(PIN_BL, 0);
+    // ----- Backlight off durante init -----
+    HW_BL_LOW();
 
     // ----- Reset HW del ST7789 -----
-    gpioWrite(PIN_RST, 1);
-    usleep(5000);
-    gpioWrite(PIN_RST, 0);
-    usleep(20000);
-    gpioWrite(PIN_RST, 1);
-    usleep(150000);
-
-    // ----- Abrir SPI0 -----
-    // spiOpen(channel, baudRate, spiFlags)
-    // channel 0 = CE0 (GPIO8)
-    // spiFlags = 0 = modo 0, active-low CS
-    spi_handle_ = spiOpen(0, SPI_SPEED_HZ, 0);
-    if (spi_handle_ < 0) {
-        fprintf(stderr, "[Renderer] spiOpen() fallido: %d\n", spi_handle_);
-        gpioTerminate();
-        return false;
-    }
+    HW_RST_HIGH();
+    hw_delay_us(5000);
+    HW_RST_LOW();
+    hw_delay_us(20000);
+    HW_RST_HIGH();
+    hw_delay_us(150000);
 
     // ----- Secuencia de inicialización del ST7789 -----
     st7789Init();
 
     // ----- Encender backlight -----
-    gpioWrite(PIN_BL, 1);
+    HW_BL_HIGH();
 
     send_buf_.reserve(SCREEN_W * 40 * 2);  // buffer para ~40 filas
 
@@ -70,11 +44,6 @@ void Renderer::shutdown()
 {
     if (!initialized_) return;
     setBacklight(false);
-    if (spi_handle_ >= 0) {
-        spiClose(spi_handle_);
-        spi_handle_ = -1;
-    }
-    gpioTerminate();
     initialized_ = false;
 }
 
@@ -83,24 +52,21 @@ void Renderer::shutdown()
 // ============================================================
 void Renderer::sendCmd(uint8_t cmd)
 {
-    gpioWrite(PIN_DC, 0);   // DC=0 → comando
-    spiWrite(spi_handle_, reinterpret_cast<char*>(&cmd), 1);
+    HW_DC_LOW();    // DC=0 → comando
+    hw_spi_write_byte(cmd);
 }
 
 void Renderer::sendData1(uint8_t d)
 {
-    gpioWrite(PIN_DC, 1);   // DC=1 → datos
-    spiWrite(spi_handle_, reinterpret_cast<char*>(&d), 1);
+    HW_DC_HIGH();   // DC=1 → datos
+    hw_spi_write_byte(d);
 }
 
 void Renderer::sendData(const uint8_t* data, int len)
 {
     if (len <= 0) return;
-    gpioWrite(PIN_DC, 1);
-    // pigpio spiWrite necesita char*, cast seguro
-    spiWrite(spi_handle_,
-             const_cast<char*>(reinterpret_cast<const char*>(data)),
-             len);
+    HW_DC_HIGH();
+    hw_spi_write_buf(data, static_cast<uint32_t>(len));
 }
 
 // Ventana de escritura CASET/RASET
@@ -128,45 +94,40 @@ void Renderer::setWindow(int x0, int y0, int x1, int y1)
 
 // ============================================================
 //  Secuencia de init del ST7789 240x240
-//  Basada en Adafruit + waveshare + datasheets
 // ============================================================
 void Renderer::st7789Init()
 {
     // Software reset
     sendCmd(ST7789Cmd::SWRESET);
-    usleep(150000);
+    hw_delay_us(150000);
 
     // Sleep out
     sendCmd(ST7789Cmd::SLPOUT);
-    usleep(10000);
+    hw_delay_us(10000);
 
     // Interface Pixel Format: 0x55 = RGB565 (16-bit)
     sendCmd(ST7789Cmd::COLMOD);
     sendData1(0x55);
-    usleep(10000);
+    hw_delay_us(10000);
 
     // Memory Data Access Control
-    // Ajustar según orientación deseada:
-    // 0x00 = normal, 0x60 = rotate 90°, 0xC0 = 180°, 0xA0 = 270°
     sendCmd(ST7789Cmd::MADCTL);
     sendData1(0x00);
 
-    // Display Inversion ON (necesario en muchos módulos ST7789)
+    // Display Inversion ON
     sendCmd(ST7789Cmd::INVON);
-    usleep(10000);
+    hw_delay_us(10000);
 
     // Normal Display Mode On
     sendCmd(ST7789Cmd::NORON);
-    usleep(10000);
+    hw_delay_us(10000);
 
     // Display On
     sendCmd(ST7789Cmd::DISPON);
-    usleep(100000);
+    hw_delay_us(100000);
 
     // Limpiamos pantalla (evita garbage visual al encender)
-    // Pintamos todo en negro
     setWindow(0, 0, SCREEN_W - 1, SCREEN_H - 1);
-    // ST7789: 240*240*2 = 115200 bytes en negro (0x00)
     static constexpr int FILL_BYTES = SCREEN_W * SCREEN_H * 2;
     std::vector<uint8_t> zeros(FILL_BYTES, 0x00);
     sendData(zeros.data(), FILL_BYTES);
@@ -208,9 +169,7 @@ void Renderer::presentFull(Framebuffer& fb)
 {
     if (!initialized_) return;
 
-    // Forzar todo dirty
-    fb.clear(Colors::BLACK);   // esto marca todo dirty  - luego se sobreescribe
-    // En realidad llamamos directamente:
+    fb.clear(Colors::BLACK);   // esto marca todo dirty - luego se sobreescribe
     fb.prepareSendBuffer(send_buf_, 0, SCREEN_H);
     setWindow(0, 0, SCREEN_W - 1, SCREEN_H - 1);
     sendData(send_buf_.data(), static_cast<int>(send_buf_.size()));
@@ -219,5 +178,5 @@ void Renderer::presentFull(Framebuffer& fb)
 
 void Renderer::setBacklight(bool on)
 {
-    if (initialized_) gpioWrite(PIN_BL, on ? 1 : 0);
+    if (on) HW_BL_HIGH(); else HW_BL_LOW();
 }

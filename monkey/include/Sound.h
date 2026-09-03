@@ -2,6 +2,10 @@
 #include "HardwareProfile.h"
 #include <cstdint>
 #include <vector>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 enum class SFX : uint8_t {
     JUMP, LAND, BARREL_ROLL, HAMMER_HIT, DIE,
@@ -10,7 +14,6 @@ enum class SFX : uint8_t {
 
 class Sound {
 public:
-    // Estructura visible para definir las tablas de notas
     struct Note {
         unsigned freq;
         unsigned dur_ms;
@@ -29,12 +32,22 @@ public:
 
 private:
     void tone(unsigned freq, unsigned dur_ms);
+    void beepThread();
 
     bool enabled_{true};
-    bool pigpio_ok_{false};
+    bool ok_{false};
     int  remaining_ms_{0};
 
-    // Para secuencias de notas
+    int  gpio_fd_{-1};
+
+    std::thread thread_;
+    std::atomic<bool> run_{false};
+    std::atomic<bool> toneActive_{false};
+    std::atomic<unsigned> toneFreqHz_{0};
+    unsigned lastDurMs_{0};
+    std::mutex  mtx_;
+    std::condition_variable cv_;
+
     std::vector<Note> currentSequence_;
     size_t currentNoteIdx_{0};
 };
