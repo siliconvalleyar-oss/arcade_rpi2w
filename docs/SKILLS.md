@@ -9,6 +9,26 @@ mismo hardware (ST7789 240x240 + GPIO) pero difieren en assets y motor.
 - Compilar SIEMPRE remoto: `sshpass -e ssh pi@cm5.local "cd /home/pi/src/arcade_rpi2w && cd <juego> && make clean && make -j4"`
 - Ejecutar: `sudo ./bin/<juego>` (o `make run`). `sudo pkill -f <bin>` antes de reejecutar.
 
+**Flujo de trabajo por rama:** ver **`docs/WORKFLOW.md`** — especialmente el
+paso de **cambiar la rama del Pi** (el Pi tiene su propia copia con cambios
+locales) y cómo preservar ese trabajo con `git stash` antes del checkout.
+
+---
+
+## Aprendizajes recientes (ver también `docs/WORKFLOW.md`)
+
+- El **Pi tiene su propia rama activa** y cambios locales sin commitear; hay
+  que `git stash` + `fetch` + `git checkout -b <rama> origin/<rama>` para
+  cambiar de juego en el Pi (no se sincroniza solo con el push local).
+- `git checkout <carpeta>` puede fallar por **ambigüedad carpeta/rama** cuando
+  un juego comparte nombre con su carpeta (ej. `sound_project`):
+  usar `git checkout -b sound_project origin/sound_project`.
+- En el CM5 **evitar** `libbcm2835`/`/dev/mem` y el **bit-bang PCM a alta
+  frecuencia (≥22050 Hz)**: ambos **tumban/reinician el kernel**. Sonido = tonos
+  simples (patrón `pacman/src/Sound.cpp`).
+- `sudo` remoto: tras configurar `sudoers` con NOPASSWD, no vuelve a pedir
+  contraseña (la caché de sudo se pierde con cada reboot).
+
 ---
 
 ## assets — carpeta de recursos
