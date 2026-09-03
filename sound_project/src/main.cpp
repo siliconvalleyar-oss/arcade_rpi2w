@@ -3,18 +3,14 @@
 #include <chrono>
 #include <thread>
 #include <csignal>
+#include <limits>
 #include "SoundGenerator.hpp"
 
 std::unique_ptr<SoundGenerator> soundGen;
-std::atomic<bool> running(true);
+static volatile std::sig_atomic_t g_stop = 0;
 
-void signalHandler(int signum) {
-    std::cout << "\nInterrupt signal received. Shutting down...\n";
-    if (soundGen) {
-        soundGen->stop();
-    }
-    running = false;
-    exit(signum);
+void signalHandler(int) {
+    g_stop = 1;
 }
 
 void showMenu() {
@@ -50,58 +46,35 @@ void showMenu() {
     std::cout << "0. Exit\n";
     std::cout << "Choose option: ";
 }
-/*
-void showMenu() {
-    std::cout << "\n=== ARCADE SOUND SYSTEM ===\n";
-    std::cout << "1. Basic Beep (440Hz)\n";
-    std::cout << "2. Arcade Blip\n";
-    std::cout << "3. Explosion Sound\n";
-    std::cout << "4. Coin Insert\n";
-    std::cout << "5. Victory Fanfare\n";
-    std::cout << "6. Custom Frequency\n";
-    std::cout << "7. Laser Shot\n";
-    std::cout << "8. Power Up\n";
-    std::cout << "9. Game Over\n";
-    std::cout << "10. Terminator Theme \n";  // Nueva opción
-//    std::cout << "11. Terminator Epic\n";  // Nueva opción
-std::cout << "11. Classic Phone Ring\n";
-    std::cout << "12. Old Dial-Up Modem\n";
-    std::cout << "13. Nokia Tune\n";
-    std::cout << "14. Motorola Ringtone\n";
-    std::cout << "15. Busy Tone\n";
-    std::cout << "16. Dial Tone\n";
-    std::cout << "17. SMS Notification\n";
-    std::cout << "18. Retro Ringtone\n";
-    std::cout << "19. DTMF Test (Press keys)\n";
-    std::cout << "20. Play Phone Number\n";
-    std::cout << "0. Exit\n";
-    std::cout << "Choose option: ";
-}
-*/
-
 
 int main() {
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
-    
+    signal(SIGPIPE, SIG_IGN);
+
     try {
         soundGen = std::make_unique<SoundGenerator>(21, 22050);
         std::cout << "Sound system initialized on GPIO21\n";
         std::cout << "Starting arcade sound demo...\n";
-        
-        // Demo arcade sequence
+
         soundGen->playArcadeBlip();
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         soundGen->playCoinSound();
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
         soundGen->playVictoryFanfare();
-        
-        // Main loop
-        int choice;
-        while (running) {
+        soundGen->stop();
+
+        int choice = -1;
+        while (!g_stop) {
             showMenu();
-            std::cin >> choice;
-            
+            if (!(std::cin >> choice)) {
+                if (g_stop || std::cin.eof()) break;
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                continue;
+            }
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
             switch (choice) {
                 case 1:
                     soundGen->playArcadeBeep(440, 300);
@@ -121,7 +94,10 @@ int main() {
                 case 6: {
                     int freq;
                     std::cout << "Enter frequency (Hz): ";
-                    std::cin >> freq;
+                    if (!(std::cin >> freq)) {
+                        std::cin.clear();
+                        break;
+                    }
                     soundGen->playArcadeBeep(freq, 300);
                     break;
                 }
@@ -140,81 +116,75 @@ int main() {
                         std::this_thread::sleep_for(std::chrono::milliseconds(50));
                     }
                     break;
-		case 10:
-    			std::cout << "Playing Terminator Theme...\n";
-	    		soundGen->playTerminatorArpeggio();  // Intro
-    			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	    		soundGen->playTerminatorTheme();     // Tema principal
-		break;
-//		case 11:
-//		    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-//		    soundGen->playTerminatorEpic();     // Tema principal
-//		    break;
-case 11:
-    soundGen->playClassicPhoneRing();
-    break;
-case 12:
-    soundGen->playOldDialUpModem();
-    break;
-case 13:
-    soundGen->playNokiaTune();
-    break;
-case 14:
-    soundGen->playMotorolaRingtone();
-    break;
-case 15:
-    soundGen->playBusyTone();
-    break;
-case 16:
-    soundGen->playFaxHandshake();
-    break;
-case 17:
-    soundGen->playFaxTransmission();
-    break;
-case 18:
-    soundGen->playFaxError();
-    break;
-case 19:
-    soundGen->playModem56kConnect();
-    break;
-case 20:
-    soundGen->playModemHandshake();
-    break;
-case 21:
-    soundGen->playCompleteDialUpSequence();
-    break;
-case 22:
-    soundGen->playModemTraining();
-    break;
-case 23:
-    soundGen->playFaxPickup();
-    break;
-case 24:
-    soundGen->playModemHangup();
-    break;
-case 25:
-    soundGen->playBusyTone();
-    break;
-case 26:
-    soundGen->playDialTone();
-    break;
-
+                case 10:
+                    soundGen->playTerminatorArpeggio();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    soundGen->playTerminatorTheme();
+                    break;
+                case 11:
+                    soundGen->playClassicPhoneRing();
+                    break;
+                case 12:
+                    soundGen->playOldDialUpModem();
+                    break;
+                case 13:
+                    soundGen->playNokiaTune();
+                    break;
+                case 14:
+                    soundGen->playMotorolaRingtone();
+                    break;
+                case 15:
+                    soundGen->playDTMF('5');
+                    break;
+                case 16:
+                    soundGen->playFaxHandshake();
+                    break;
+                case 17:
+                    soundGen->playFaxTransmission();
+                    break;
+                case 18:
+                    soundGen->playFaxError();
+                    break;
+                case 19:
+                    soundGen->playModem56kConnect();
+                    break;
+                case 20:
+                    soundGen->playModemHandshake();
+                    break;
+                case 21:
+                    soundGen->playCompleteDialUpSequence();
+                    break;
+                case 22:
+                    soundGen->playModemTraining();
+                    break;
+                case 23:
+                    soundGen->playFaxPickup();
+                    break;
+                case 24:
+                    soundGen->playModemHangup();
+                    break;
+                case 25:
+                    soundGen->playBusyTone();
+                    break;
+                case 26:
+                    soundGen->playDialTone();
+                    break;
                 case 0:
                     std::cout << "Exiting...\n";
-                    running = false;
+                    g_stop = 1;
                     break;
                 default:
                     std::cout << "Invalid option\n";
             }
         }
-        
-        soundGen->stop();
-        
+
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << "\n";
         return 1;
     }
-    
+
+    if (soundGen) {
+        soundGen->stop();
+    }
     return 0;
 }
-

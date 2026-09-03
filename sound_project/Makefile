@@ -36,8 +36,7 @@ clean:
 	@echo -e "$(GREEN)Limpieza completada$(NC)"
 
 run: $(TARGET_BIN)
-	@echo -e "$(YELLOW)Nota: Este proyecto requiere libbcm2835 para PWM por hardware$(NC)"
-	@echo -e "$(YELLOW}Ver script_tools/ o build.sh para instalacion de dependencias$(NC)"
+	@echo -e "$(YELLOW)Nota: Sonido por bit-bang en GPIO via /dev/gpiochip0 (pasivo)$(NC)"
 	sudo $(TARGET_BIN)
 
 help:
