@@ -4,23 +4,19 @@ Juego de Donkey Kong con sprites PNG, fisica AABB, 3 niveles y modo demo.
 
 ## Driver
 
-Este proyecto usa **pigpio** (no GPIO ioctl directo). Requiere instalacion:
-
-```bash
-sudo apt-get install libpigpio-dev
-```
+Este proyecto usa **ioctl del kernel** (`/dev/gpiochip0` + `/dev/spidev0.0`),
+igual que pacman/cars. No requiere librerías externas (ni pigpio, ni bcm2835).
 
 ## Controles
 
-- **Joystick opcional**: Descomentar `#define JOYSTICK_ENABLED` en HardwareProfile.h
+- **Joystick (GPIO)**: UP/DOWN/LEFT/RIGHT + BTN_A para saltar
 - **Modo demo**: IA que juega automaticamente
 
 ## Compilar
 
 ```bash
-make install-deps   # Instalar pigpio
 make
-sudo make run
+make run        # ejecuta con sudo
 ```
 
 ## Conexion
@@ -42,15 +38,16 @@ sudo make run
 monkey/
 ├── include/
 │   ├── HardwareProfile.h
+│   ├── Hw.h (GPIO+SPI via ioctl)
 │   ├── Game.h
 │   ├── Graphics.h (Framebuffer doble + dirty-rect)
-│   ├── Renderer.h (ST7789 via pigpio)
+│   ├── Renderer.h (ST7789 via SPI ioctl)
 │   ├── Player.h / Enemy.h / Level.h / Physics.h
-│   ├── Sound.h
+│   ├── Sound.h (bit-bang en hilo)
 │   └── Types.h
 ├── src/
 │   ├── main.cpp
-│   ├── Game.cpp / Graphics.cpp / Renderer.cpp
+│   ├── Hw.cpp / Game.cpp / Graphics.cpp / Renderer.cpp
 │   ├── Player.cpp / Enemy.cpp / Level.cpp / Physics.cpp
 │   └── Sound.cpp
 ├── Makefile

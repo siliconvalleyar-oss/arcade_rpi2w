@@ -4,13 +4,12 @@
   "commands": {
     "build": "make",
     "run": "sudo make run",
-    "clean": "make clean",
-    "install-deps": "make install-deps"
+    "clean": "make clean"
   },
   "hardware": {
-    "display": "ST7789 240x240 via pigpio SPI",
-    "gpio": "pigpio library",
-    "dependencies": "libpigpio-dev",
+    "display": "ST7789 240x240 via SPI ioctl (/dev/spidev0.0)",
+    "gpio": "ioctl /dev/gpiochip0 (sin librerias externas)",
+    "dependencies": "ninguna (same pattern as pacman/cars)",
     "joystick": "Optional: UP/DOWN/LEFT/RIGHT + BTN_A/B"
   }
 }
