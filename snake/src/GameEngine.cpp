@@ -1,6 +1,7 @@
 #include "GameEngine.h"
 #include "Graphics.h"
 #include "FrameBuffer.h"
+#include "Sound.h"
 #include <cstdlib>
 #include <ctime>
 #include <cstdio>
@@ -51,7 +52,7 @@ namespace GameEngine {
             if (BTN_FIRE()) {
                 if (score > hiScore) hiScore = score;
                 init_game();
-
+                sound_start();
             }
             return;
         }
@@ -79,7 +80,7 @@ namespace GameEngine {
         for (int i = 0; i < slen; i++) {
             if (sx[i] == nx && sy[i] == ny) {
                 gameOver = true;
-
+                sound_death();
                 return;
             }
         }
@@ -97,6 +98,7 @@ namespace GameEngine {
             slen++;
             if (slen > MAXLEN) slen = MAXLEN;
             score += 10;
+            sound_beep(1200, 30);
 
             place_food();
             if (score % 50 == 0 && moveDelay > 3) moveDelay--;
@@ -144,6 +146,7 @@ namespace GameEngine {
         Graphics::draw_string(20, 160, "PRESS FIRE TO START", WHITE, BLACK, 1);
         FrameBuffer::get().flush();
 
+        sound_start();
         while (!BTN_FIRE()) delay_ms(20);
         delay_ms(200);
         init_game();
