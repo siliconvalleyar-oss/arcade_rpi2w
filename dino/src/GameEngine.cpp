@@ -184,7 +184,7 @@ namespace GameEngine {
 
     void draw(void) {
         static FrameBuffer& fb = FrameBuffer::get();
-        fb.clear(BLACK);
+        fb.clear(WHITE);
 
         draw_ground();
 
@@ -201,17 +201,17 @@ namespace GameEngine {
                              dinoSprites[dinoFrame], BLACK);
 
         // HUD
-        Graphics::draw_string(5, 5, "HI", GRAY, BLACK, 1);
-        Graphics::draw_number(20, 5, hiScore, GRAY, BLACK, 1);
-        Graphics::draw_number(100, 5, score, WHITE, BLACK, 1);
+        Graphics::draw_string(5, 5, "HI", GRAY, WHITE, 1);
+        Graphics::draw_number(20, 5, hiScore, GRAY, WHITE, 1);
+        Graphics::draw_number(100, 5, score, DARK_GRAY, WHITE, 1);
 
         char buf[16];
         snprintf(buf, sizeof(buf), "SPD:%d", speed);
-        Graphics::draw_string(180, 5, buf, GRAY, BLACK, 1);
+        Graphics::draw_string(180, 5, buf, GRAY, WHITE, 1);
 
         if (gameOver) {
-            Graphics::draw_string(65, 110, "GAME OVER", RED, BLACK, 2);
-            Graphics::draw_string(35, 140, "PRESS FIRE", YELLOW, BLACK, 1);
+            Graphics::draw_string(65, 110, "GAME OVER", RED, WHITE, 2);
+            Graphics::draw_string(35, 140, "PRESS FIRE", RED, WHITE, 1);
         }
 
         fb.flush();
@@ -228,11 +228,11 @@ namespace GameEngine {
         init_game();
 
         // Title screen
-        Graphics::fill_screen(BLACK);
-        Graphics::draw_string(30, 70, "DINO RUNNER", GREEN, BLACK, 2);
+        Graphics::fill_screen(WHITE);
+        Graphics::draw_string(30, 70, "DINO RUNNER", GREEN, WHITE, 2);
         Graphics::drawSprite((TFT_W - dinoSprites[0].w) / 2, 100,
                              dinoSprites[0], BLACK);
-        Graphics::draw_string(25, 170, "PRESS FIRE TO START", YELLOW, BLACK, 1);
+        Graphics::draw_string(25, 170, "PRESS FIRE TO START", DARK_GRAY, WHITE, 1);
         FrameBuffer::get().flush();
         while (!BTN_FIRE()) delay_ms(20);
         delay_ms(200);

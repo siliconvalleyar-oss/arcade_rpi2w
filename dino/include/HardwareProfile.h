@@ -19,7 +19,7 @@
   #define PIN_BL     26
   #ifdef USE_BUTTONS
   #define BTN_START_PIN    5
-  #define BTN_FIRE_PIN  6
+  #define BTN_FIRE_PIN  17
   #define BTN_LEFT_PIN  27
   #define BTN_RIGHT_PIN 23
   #endif
