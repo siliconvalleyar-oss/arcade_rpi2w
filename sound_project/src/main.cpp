@@ -53,8 +53,8 @@ int main() {
     signal(SIGPIPE, SIG_IGN);
 
     try {
-        soundGen = std::make_unique<SoundGenerator>(21, 22050);
-        std::cout << "Sound system initialized on GPIO21\n";
+        soundGen = std::make_unique<SoundGenerator>(13, 22050);
+        std::cout << "Sound system initialized on GPIO13\n";
         std::cout << "Starting arcade sound demo...\n";
 
         soundGen->playArcadeBlip();
