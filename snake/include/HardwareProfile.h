@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-#define BONNET_ADAFRUIT_ST7789
+//#define BONNET_ADAFRUIT_ST7789
 #define USE_BUTTONS
 
 #ifdef BONNET_ADAFRUIT_ST7789
