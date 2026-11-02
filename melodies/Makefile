@@ -17,3 +17,6 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 clean:
 	rm -rf $(OBJDIR) $(BINDIR)
+
+run: $(TARGET_BIN)
+	@sudo ./$(TARGET_BIN)
