@@ -1,4 +1,4 @@
-TARGET = space_invaders
+TARGET = snake
 CXX = g++
 CXXFLAGS = -O2 -std=c++11 -Wall -Iinclude
 LDFLAGS = -lpthread
@@ -37,7 +37,7 @@ clean:
 	@echo -e "$(GREEN)Limpieza completada$(NC)"
 
 run: $(TARGET_BIN)
-	@echo -e "$(GREEN)Ejecutando Space Invaders...$(NC)"
+	@echo -e "$(GREEN)Ejecutando Dino Runner...$(NC)"
 	@-sudo killall pigpiod 2>/dev/null || true
 	sudo $(TARGET_BIN)
 

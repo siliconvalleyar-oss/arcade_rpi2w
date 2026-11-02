@@ -43,7 +43,7 @@ static int gpio_init(void) {
         req.lineoffsets[i] = out_pins[i];
         req.default_values[i] = pin_state[i];
     }
-    strncpy(req.consumer_label, "dino_out", 15);
+    strncpy(req.consumer_label, "snake_out", 15);
     if (ioctl(gpio_fd, GPIO_GET_LINEHANDLE_IOCTL, &req) < 0) {
         perror("GPIO_GET_LINEHANDLE_IOCTL out"); return -2;
     }
@@ -53,7 +53,7 @@ static int gpio_init(void) {
     req.flags = GPIOHANDLE_REQUEST_INPUT;
     req.lines = N_IN_PINS;
     for (int i = 0; i < N_IN_PINS; i++) req.lineoffsets[i] = in_pins[i];
-    strncpy(req.consumer_label, "dino_in", 15);
+    strncpy(req.consumer_label, "snake_in", 15);
     if (ioctl(gpio_fd, GPIO_GET_LINEHANDLE_IOCTL, &req) < 0) {
         perror("GPIO_GET_LINEHANDLE_IOCTL in"); return -3;
     }
