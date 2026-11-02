@@ -19,4 +19,4 @@ clean:
 	rm -rf $(OBJDIR) $(BINDIR)
 
 run: $(TARGET_BIN)
-	@sudo ./$(TARGET_BIN)
+	@./$(TARGET_BIN)
