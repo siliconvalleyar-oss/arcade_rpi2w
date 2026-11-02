@@ -223,7 +223,7 @@ int hw_init(void) {
 }
 
 int main(void) {
-    fprintf(stderr, "=== DINO RUNNER ===\n");
+    fprintf(stderr, "=== SNAKE ===\n");
     if (hw_init() < 0) { fprintf(stderr, "hw_init failed\n"); return 1; }
     init_display();
     delay_ms(50);
