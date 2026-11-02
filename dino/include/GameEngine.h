@@ -3,6 +3,7 @@
 
 #include "HardwareProfile.h"
 #include "Sprite.h"
+#include "Sound.h"
 #include <stdint.h>
 
 namespace GameEngine {

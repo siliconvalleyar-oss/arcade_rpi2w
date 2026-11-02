@@ -1,5 +1,6 @@
 #include "GameEngine.h"
 #include "Graphics.h"
+#include "Sound.h"
 #include "FrameBuffer.h"
 #include <cstdlib>
 #include <ctime>
@@ -79,6 +80,7 @@ namespace GameEngine {
             if (BTN_FIRE()) {
                 if (score > hiScore) hiScore = score;
                 init_game();
+                sound_start();
             }
             return;
         }
@@ -87,6 +89,7 @@ namespace GameEngine {
         if (BTN_FIRE() && onGround) {
             dinoVy = JUMP_VEL;
             onGround = false;
+            sound_jump();
         }
 
         // Gravity
@@ -161,6 +164,7 @@ namespace GameEngine {
             if (cx < ox + ow && cx + cw > ox &&
                 cy < oy + oh && cy + ch > oy) {
                 gameOver = true;
+                sound_death();
                 break;
             }
         }
@@ -234,9 +238,11 @@ namespace GameEngine {
                              dinoSprites[0], BLACK);
         Graphics::draw_string(25, 170, "PRESS FIRE TO START", DARK_GRAY, WHITE, 1);
         FrameBuffer::get().flush();
+        sound_start();
         while (!BTN_FIRE()) delay_ms(20);
         delay_ms(200);
         init_game();
+        sound_start();
 
         struct timespec last, now;
         clock_gettime(CLOCK_MONOTONIC, &last);

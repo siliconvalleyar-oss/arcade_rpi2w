@@ -1,6 +1,7 @@
 #include "HardwareProfile.h"
 #include "Graphics.h"
 #include "GameEngine.h"
+#include "Sound.h"
 #include "FrameBuffer.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -229,6 +230,7 @@ int main(void) {
     delay_ms(50);
     BL_HIGH();
 
+    sound_init();
     FrameBuffer::get().init();
     srand((unsigned)time(NULL));
     GameEngine::game_loop();
