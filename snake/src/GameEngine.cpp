@@ -6,72 +6,44 @@
 #include <cstdio>
 
 namespace GameEngine {
-    // Dino state
-    static int16_t dinoY;
-    static int16_t dinoVy;
-    static bool onGround;
-    static uint8_t dinoFrame;
-    static uint8_t animTimer;
+    static const int GRID = 12;
+    static const int COLS = TFT_W / GRID;
+    static const int ROWS = TFT_H / GRID;
+    static const int MAXLEN = 400;
 
-    // World
-    static int16_t speed;
-    static uint32_t groundScroll;
-    static uint32_t score;
-    static uint32_t hiScore;
+    static int sx[MAXLEN], sy[MAXLEN];
+    static int slen;
+    static int dx, dy;
+    static int fx, fy;
+    static uint32_t score, hiScore;
     static bool gameOver;
+    static int moveTimer, moveDelay;
+    static bool started;
 
-    // Cactus
-    static Cactus cactus[MAX_CACTUS];
-    static int16_t cactusTimer;
-
-    // Sprites
-    Sprite dinoSprites[2];
-    Sprite cactusSprites[2];
-    bool spritesLoaded = false;
-
-    bool load_sprites(void) {
-        if (spritesLoaded) return true;
-        const char* dinoFiles[2] = {"assets/dino_00.png","assets/dino_01.png"};
-        for (int i = 0; i < 2; i++) {
-            if (!dinoSprites[i].load(dinoFiles[i])) {
-                fprintf(stderr, "Error loading %s\n", dinoFiles[i]);
-                return false;
+    static void place_food(void) {
+        bool ok;
+        do {
+            ok = true;
+            fx = rand() % COLS;
+            fy = rand() % ROWS;
+            for (int i = 0; i < slen; i++) {
+                if (sx[i] == fx && sy[i] == fy) { ok = false; break; }
             }
-        }
-        const char* cactusFiles[2] = {"assets/cactus_00.png","assets/cactus_01.png"};
-        for (int i = 0; i < 2; i++) {
-            if (!cactusSprites[i].load(cactusFiles[i])) {
-                fprintf(stderr, "Error loading %s\n", cactusFiles[i]);
-                return false;
-            }
-        }
-        spritesLoaded = true;
-        fprintf(stderr, "Sprites: dino0=%dx%d dino1=%dx%d cactus0=%dx%d cactus1=%dx%d\n",
-                dinoSprites[0].w, dinoSprites[0].h,
-                dinoSprites[1].w, dinoSprites[1].h,
-                cactusSprites[0].w, cactusSprites[0].h,
-                cactusSprites[1].w, cactusSprites[1].h);
-        return true;
+        } while (!ok);
     }
 
-    static int dinoH() { return dinoSprites[dinoFrame].h; }
-    static int dinoW() { return dinoSprites[dinoFrame].w; }
-    static int cactusH(int t) { return cactusSprites[t].h; }
-    static int cactusW(int t) { return cactusSprites[t].w; }
-    static int dinoDrawY() { return GROUND_Y - dinoH(); }
-
     void init_game(void) {
-        dinoY = GROUND_Y - dinoSprites[0].h;
-        dinoVy = 0;
-        onGround = true;
-        dinoFrame = 0;
-        animTimer = 0;
-        speed = GAME_SPEED_INIT;
-        groundScroll = 0;
+        slen = 4;
+        for (int i = 0; i < slen; i++) {
+            sx[i] = 10 - i;
+            sy[i] = 10;
+        }
+        dx = 1; dy = 0;
         score = 0;
         gameOver = false;
-        cactusTimer = 60;
-        for (int i = 0; i < MAX_CACTUS; i++) cactus[i].active = false;
+        moveTimer = 0;
+        moveDelay = 8;
+        place_food();
     }
 
     void update(void) {
@@ -79,139 +51,83 @@ namespace GameEngine {
             if (BTN_FIRE()) {
                 if (score > hiScore) hiScore = score;
                 init_game();
+
             }
             return;
         }
 
-        // Jump
-        if (BTN_FIRE() && onGround) {
-            dinoVy = JUMP_VEL;
-            onGround = false;
-        }
+        // Input
+        if (BTN_UP() && dy == 0) { dx = 0; dy = -1; }
+        if (BTN_DOWN() && dy == 0) { dx = 0; dy = 1; }
+        if (BTN_LEFT() && dx == 0) { dx = -1; dy = 0; }
+        if (BTN_RIGHT() && dx == 0) { dx = 1; dy = 0; }
 
-        // Gravity
-        if (!onGround) {
-            dinoVy += GRAVITY;
-            dinoY += dinoVy;
-            int groundY = GROUND_Y - dinoH();
-            if (dinoY >= groundY) {
-                dinoY = groundY;
-                dinoVy = 0;
-                onGround = true;
-            }
-        }
+        moveTimer++;
+        if (moveTimer < moveDelay) return;
+        moveTimer = 0;
 
-        // Animation
-        animTimer++;
-        if (animTimer >= 8) {
-            animTimer = 0;
-            dinoFrame = (dinoFrame + 1) % 2;
-        }
+        int nx = sx[0] + dx;
+        int ny = sy[0] + dy;
 
-        // Scroll ground
-        groundScroll += speed;
+        // Wrap
+        if (nx < 0) nx = COLS - 1;
+        if (nx >= COLS) nx = 0;
+        if (ny < 0) ny = ROWS - 1;
+        if (ny >= ROWS) ny = 0;
 
-        // Score
-        score += 1;
-
-        // Speed increase every 500 points
-        if (score > 0 && score % 500 == 0 && speed < 15) speed++;
-
-        // Cactus spawn
-        cactusTimer--;
-        if (cactusTimer <= 0) {
-            cactusTimer = 40 + rand() % 40;
-            if (speed > 10) cactusTimer = 25 + rand() % 25;
-            for (int i = 0; i < MAX_CACTUS; i++) {
-                if (!cactus[i].active) {
-                    cactus[i].active = true;
-                    cactus[i].x = TFT_W + 10;
-                    cactus[i].type = (rand() % 2 == 0) ? 0 : 1;
-                    break;
-                }
-            }
-        }
-
-        // Move cactus
-        for (int i = 0; i < MAX_CACTUS; i++) {
-            if (!cactus[i].active) continue;
-            cactus[i].x -= speed;
-            if (cactus[i].x + cactusW(cactus[i].type) < 0)
-                cactus[i].active = false;
-        }
-
-        // Collision: AABB with 4px margin
-        int cx = DINO_X + 6;
-        int cy = dinoDrawY() + 4;
-        int cw = dinoW() - 12;
-        int ch = dinoH() - 8;
-        if (cw < 4) cw = 4;
-        if (ch < 4) ch = 4;
-
-        for (int i = 0; i < MAX_CACTUS; i++) {
-            if (!cactus[i].active) continue;
-            int t = cactus[i].type;
-            int ox = cactus[i].x + 4;
-            int oy = GROUND_Y - cactusH(t) + 4;
-            int ow = cactusW(t) - 8;
-            int oh = cactusH(t) - 8;
-            if (ow < 4) ow = 4;
-            if (oh < 4) oh = 4;
-
-            if (cx < ox + ow && cx + cw > ox &&
-                cy < oy + oh && cy + ch > oy) {
+        // Self collision
+        for (int i = 0; i < slen; i++) {
+            if (sx[i] == nx && sy[i] == ny) {
                 gameOver = true;
-                break;
+
+                return;
             }
+        }
+
+        // Move
+        for (int i = slen; i > 0; i--) {
+            sx[i] = sx[i - 1];
+            sy[i] = sy[i - 1];
+        }
+        sx[0] = nx;
+        sy[0] = ny;
+
+        // Eat
+        if (nx == fx && ny == fy) {
+            slen++;
+            if (slen > MAXLEN) slen = MAXLEN;
+            score += 10;
+
+            place_food();
+            if (score % 50 == 0 && moveDelay > 3) moveDelay--;
         }
     }
 
-    static void draw_ground(void) {
-        Graphics::fill_rect(0, GROUND_Y, TFT_W, 3, DARK_GRAY);
-        Graphics::fill_rect(0, GROUND_Y + 3, TFT_W, 2, GRAY);
-
-        // Pebbles scrolling
-        for (int i = 0; i < 10; i++) {
-            int px = ((i * 27 + 7) * 3 - (int)groundScroll) % (TFT_W + 20);
-            if (px < 0) px += TFT_W + 20;
-            if (px > TFT_W) continue;
-            uint16_t c = (i % 3 == 0) ? LIGHT_GRAY : DARK_GRAY;
-            Graphics::draw_pixel(px, GROUND_Y + 4, c);
-            if (i % 2 == 0)
-                Graphics::draw_pixel(px + 1, GROUND_Y + 5, c);
-        }
+    static void draw_cell(int gx, int gy, uint16_t color) {
+        Graphics::fill_rect(gx * GRID + 1, gy * GRID + 1, GRID - 2, GRID - 2, color);
     }
 
     void draw(void) {
         static FrameBuffer& fb = FrameBuffer::get();
         fb.clear(BLACK);
 
-        draw_ground();
+        // Food
+        draw_cell(fx, fy, RED);
 
-        // Cactus
-        for (int i = 0; i < MAX_CACTUS; i++) {
-            if (!cactus[i].active) continue;
-            int t = cactus[i].type;
-            Graphics::drawSprite(cactus[i].x, GROUND_Y - cactusH(t),
-                                 cactusSprites[t], BLACK);
+        // Snake
+        for (int i = 0; i < slen; i++) {
+            draw_cell(sx[i], sy[i], (i == 0) ? GREEN : DARK_GRAY);
         }
 
-        // Dino
-        Graphics::drawSprite(DINO_X, dinoDrawY(),
-                             dinoSprites[dinoFrame], BLACK);
-
         // HUD
-        Graphics::draw_string(5, 5, "HI", GRAY, BLACK, 1);
-        Graphics::draw_number(20, 5, hiScore, GRAY, BLACK, 1);
-        Graphics::draw_number(100, 5, score, WHITE, BLACK, 1);
-
-        char buf[16];
-        snprintf(buf, sizeof(buf), "SPD:%d", speed);
-        Graphics::draw_string(180, 5, buf, GRAY, BLACK, 1);
+        Graphics::draw_string(5, 5, "SCORE", WHITE, BLACK, 1);
+        Graphics::draw_number(50, 5, score, YELLOW, BLACK, 1);
+        Graphics::draw_string(120, 5, "HI", WHITE, BLACK, 1);
+        Graphics::draw_number(140, 5, hiScore, YELLOW, BLACK, 1);
 
         if (gameOver) {
-            Graphics::draw_string(65, 110, "GAME OVER", RED, BLACK, 2);
-            Graphics::draw_string(35, 140, "PRESS FIRE", YELLOW, BLACK, 1);
+            Graphics::draw_string(70, 110, "GAME OVER", RED, BLACK, 2);
+            Graphics::draw_string(40, 140, "PRESS FIRE", WHITE, BLACK, 1);
         }
 
         fb.flush();
@@ -219,21 +135,15 @@ namespace GameEngine {
 
     void game_loop(void) {
         srand(time(NULL));
-        if (!load_sprites()) {
-            fprintf(stderr, "FATAL: could not load sprites\n");
-            return;
-        }
-
         hiScore = 0;
         init_game();
 
-        // Title screen
+        // Title
         Graphics::fill_screen(BLACK);
-        Graphics::draw_string(30, 70, "DINO RUNNER", GREEN, BLACK, 2);
-        Graphics::drawSprite((TFT_W - dinoSprites[0].w) / 2, 100,
-                             dinoSprites[0], BLACK);
-        Graphics::draw_string(25, 170, "PRESS FIRE TO START", YELLOW, BLACK, 1);
+        Graphics::draw_string(50, 80, "SNAKE", GREEN, BLACK, 2);
+        Graphics::draw_string(20, 160, "PRESS FIRE TO START", WHITE, BLACK, 1);
         FrameBuffer::get().flush();
+
         while (!BTN_FIRE()) delay_ms(20);
         delay_ms(200);
         init_game();

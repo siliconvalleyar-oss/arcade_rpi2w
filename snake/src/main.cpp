@@ -28,8 +28,8 @@ static const uint32_t out_pins[N_OUT_PINS] = {
 };
 static uint8_t pin_state[N_OUT_PINS] = {0, 1, 0};
 
-static const uint32_t in_pins[] = { BTN_FIRE_PIN, BTN_LEFT_PIN, BTN_RIGHT_PIN };
-#define N_IN_PINS 3
+static const uint32_t in_pins[] = { BTN_FIRE_PIN, BTN_LEFT_PIN, BTN_RIGHT_PIN, BTN_START_PIN };
+#define N_IN_PINS 4
 
 static int gpio_init(void) {
     gpio_fd = open(GPIO_CHIP, O_RDONLY);

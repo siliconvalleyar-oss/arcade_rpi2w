@@ -80,6 +80,8 @@ int  gpio_read(int pin);
 #define BTN_FIRE()   (gpio_read(BTN_FIRE_PIN) == 0)
 #define BTN_LEFT()   (gpio_read(BTN_LEFT_PIN) == 0)
 #define BTN_RIGHT()  (gpio_read(BTN_RIGHT_PIN) == 0)
+#define BTN_UP()     (gpio_read(BTN_FIRE_PIN) == 0)
+#define BTN_DOWN()   (gpio_read(BTN_START_PIN) == 0)
 
 int  hw_init(void);
 void hw_close(void);
