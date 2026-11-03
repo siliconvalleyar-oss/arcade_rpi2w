@@ -1,8 +1,8 @@
 all:
-	$(MAKE) -C sound_project
+	$(MAKE) -C snake
 
 clean:
-	$(MAKE) -C sound_project clean
+	$(MAKE) -C snake clean
 
 run:
-	$(MAKE) -C sound_project run
+	$(MAKE) -C snake run

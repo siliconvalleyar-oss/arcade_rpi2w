@@ -7,9 +7,8 @@
     "clean": "make clean"
   },
   "hardware": {
-    "audio": "bit-bang por ioctl /dev/gpiochip0 (buzzer pasivo)",
+    "audio": "PWM via libbcm2835",
     "gpio": "GPIO 21 (configurable)",
-    "dependencies": "ninguna externa (linux/gpio.h ioctl)"
-  },
-  "cm5_notes": "No usar libbcm2835 (acceso /dev/mem) ni bit-bang PCM de alta frecuencia (>=22050Hz): ambos tumban el kernel del CM5. Solo generar tonos simples (ondas cuadradas a baja frecuencia) como en pacman/mario."
+    "dependencies": "libbcm2835"
+  }
 }
